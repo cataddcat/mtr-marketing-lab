@@ -1,3 +1,12 @@
+@keyframes toast-in {
+  from { transform: translateY(8px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+
+.toast-slide-in {
+  animation: toast-in 220ms ease-out both;
+}
+
 :where(button, [role="button"], a, input, textarea, select, summary):focus-visible {
   outline: 2px solid #F37021;
   outline-offset: 2px;

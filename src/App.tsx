@@ -173,6 +173,7 @@ export default function App() {
     navigator.clipboard.writeText(text);
     setCopiedIndex(id);
     setTimeout(() => setCopiedIndex(null), 2000);
+    toast.success('คัดลอกข้อความแล้ว');
   };
 
   const handleSaveAd = (index: number, ad: AdIdea) => {
@@ -184,12 +185,14 @@ export default function App() {
     const updatedLibrary = [newSavedAd, ...savedAds];
     setSavedAds(updatedLibrary);
     localStorage.setItem('mtr_saved_ads', JSON.stringify(updatedLibrary));
+    toast.success('บันทึกลงคลังแล้ว');
   };
 
   const handleRemoveSaved = (idToRemove: string) => {
     const updatedLibrary = savedAds.filter(ad => ad.id !== idToRemove);
     setSavedAds(updatedLibrary);
     localStorage.setItem('mtr_saved_ads', JSON.stringify(updatedLibrary));
+    toast.info('ลบออกจากคลังแล้ว');
   };
 
   const handleExportObsidian = (ad: SavedAd) => {
@@ -453,7 +456,7 @@ ${ad.visual_idea}
                     <dl className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div className="bg-black/30 p-3 rounded-lg border border-gray-700">
                         <dt className="text-xs text-gray-500 mb-1">เฉลี่ยรวม</dt>
-                        <dd className="text-2xl font-bold text-hermes">{evaluations[idx].average_score}/10</dd>
+                        <dd className="text-2xl font-bold text-hermes">{evaluations[idx].average_score.toFixed(1)}/10</dd>
                       </div>
                       <div className="bg-black/30 p-3 rounded-lg border border-gray-700">
                         <dt className="text-xs text-gray-500 mb-1">พ่อบ้าน</dt>

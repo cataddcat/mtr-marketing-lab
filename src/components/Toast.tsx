@@ -118,7 +118,7 @@ const ToastViewport = ({ toasts, onDismiss }: ViewportProps) => (
         <div
           key={t.id}
           role={t.kind === 'error' ? 'alert' : 'status'}
-          className={`pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-lg border shadow-lg backdrop-blur-sm ${classes}`}
+          className={`toast-slide-in pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-lg border shadow-lg backdrop-blur-sm ${classes}`}
         >
           <Icon className="w-5 h-5 shrink-0 mt-0.5" aria-hidden="true" />
           <span className="flex-1 text-sm leading-snug break-words">{t.message}</span>
