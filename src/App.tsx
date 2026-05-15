@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef, useId } from 'react';
 import { generateAds, evaluateAd, generateImagePrompt } from './services/marketing-agent';
 import type { AdIdea, AdEvaluation, VisualPrompt } from './services/marketing-agent';
-import { Loader2, Target, Image as ImageIcon, BarChart, CheckCircle, Copy, Check, Bookmark, Trash2, Download, Palette } from 'lucide-react';
+import { fetchTrends, type TrendsSnapshot } from './services/trends';
+import { Loader2, Target, Image as ImageIcon, BarChart, CheckCircle, Copy, Check, Bookmark, Trash2, Download, Palette, TrendingUp } from 'lucide-react';
 import { InlineError } from './components/InlineError';
 import { useToast } from './components/Toast';
+import { PersonaScoreCard } from './components/PersonaScoreCard';
+import { PERSONA_LABELS } from './lib/schemas';
 
 interface SavedAd extends AdIdea {
   id: string;
@@ -44,6 +47,7 @@ export default function App() {
   const generateAbortRef = useRef<AbortController | null>(null);
   const evalAbortsRef = useRef<Map<number, AbortController>>(new Map());
   const visualAbortsRef = useRef<Map<number, AbortController>>(new Map());
+  const trendsRef = useRef<TrendsSnapshot | null>(null);
 
   useEffect(() => {
     const localData = localStorage.getItem('mtr_saved_ads');
@@ -80,8 +84,12 @@ export default function App() {
     setEvalErrors({});
     setVisualErrors({});
     try {
-      const results = await generateAds(product, promo, controller.signal);
+      const [results, trends] = await Promise.all([
+        generateAds(product, promo, controller.signal),
+        fetchTrends(product, controller.signal),
+      ]);
       if (controller.signal.aborted) return;
+      trendsRef.current = trends;
       setAds(results);
       if (results.length === 0) {
         setGenerateError('The AI returned no usable ad ideas. Try rewording your input.');
@@ -112,7 +120,7 @@ export default function App() {
       return next;
     });
     try {
-      const result = await evaluateAd(ad, controller.signal);
+      const result = await evaluateAd(ad, controller.signal, { trends: trendsRef.current });
       if (controller.signal.aborted) return;
       if (result) {
         setEvaluations(prev => ({ ...prev, [index]: result }));
@@ -197,13 +205,29 @@ export default function App() {
 
   const handleExportObsidian = (ad: SavedAd) => {
     const date = new Date().toISOString().split('T')[0];
-    const score = ad.evaluation?.average_score || 'N/A';
-    
+    const evalData = ad.evaluation;
+    const avg = evalData?.average_score;
+    const scoreText = typeof avg === 'number' ? avg.toFixed(1) : 'N/A';
+
+    const personaLines = evalData
+      ? evalData.personas
+          .map(p => {
+            const personaAvg = ((p.scroll_stop_score + p.focused_score + p.memory_score) / 3).toFixed(1);
+            return `- **${PERSONA_LABELS[p.id]}** (${personaAvg}/10) — ${p.verdict}\n  - 💡 ${p.suggestion}`;
+          })
+          .join('\n')
+      : '- N/A';
+
+    const verdictLine = evalData?.panel_verdict ? `\n> ${evalData.panel_verdict}\n` : '';
+    const trendsLine = evalData && evalData.trends_used.length > 0
+      ? `\n**เทรนด์ที่ใช้:** ${evalData.trends_used.join(', ')}\n`
+      : '';
+
     const mdContent = `---
 title: "MTR Ad - ${ad.style}"
 date: ${date}
 tags: ["#Marketing", "#FacebookAds", "#Marnthara"]
-score: ${score}
+score: ${scoreText}
 style: "${ad.style}"
 ---
 
@@ -216,10 +240,9 @@ ${ad.copy}
 ${ad.visual_idea}
 
 ## 📊 การประเมิน (The Judge)
-- **คะแนนเฉลี่ย**: ${score}/10
-- **พ่อบ้าน**: ${ad.evaluation?.family_man_score || 'N/A'}/10
-- **แม่บ้าน**: ${ad.evaluation?.housewife_score || 'N/A'}/10
-- **เจ้าของธุรกิจ**: ${ad.evaluation?.businessman_score || 'N/A'}/10
+${verdictLine}**คะแนนเฉลี่ย**: ${scoreText}/10
+${trendsLine}
+${personaLines}
 `;
 
     const blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8' });
@@ -454,24 +477,28 @@ ${ad.visual_idea}
                       ประเมินความโดนใจ (The Judge)
                     </button>
                   ) : (
-                    <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <div className="bg-black/30 p-3 rounded-lg border border-gray-700">
-                        <dt className="text-xs text-gray-500 mb-1">เฉลี่ยรวม</dt>
-                        <dd className="text-2xl font-bold text-hermes">{evaluations[idx].average_score.toFixed(1)}/10</dd>
+                    <div className="space-y-3">
+                      <div className="bg-black/40 border border-gray-700 rounded-lg p-3">
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <p className="text-xs text-gray-500 uppercase tracking-wide">Panel Verdict</p>
+                          <span className="text-2xl font-bold text-hermes leading-none">
+                            {evaluations[idx].average_score.toFixed(1)}<span className="text-xs text-gray-500 font-normal">/10</span>
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-200 leading-snug">{evaluations[idx].panel_verdict}</p>
+                        {evaluations[idx].trends_used.length > 0 && (
+                          <p className="text-xs text-gray-500 mt-2 flex items-start gap-1.5">
+                            <TrendingUp className="w-3 h-3 mt-0.5 shrink-0 text-blue-400" aria-hidden="true" />
+                            <span>เทรนด์: <span className="text-blue-300">{evaluations[idx].trends_used.join(' · ')}</span></span>
+                          </p>
+                        )}
                       </div>
-                      <div className="bg-black/30 p-3 rounded-lg border border-gray-700">
-                        <dt className="text-xs text-gray-500 mb-1">พ่อบ้าน</dt>
-                        <dd className="text-lg font-semibold text-gray-100">{evaluations[idx].family_man_score}</dd>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {evaluations[idx].personas.map(p => (
+                          <PersonaScoreCard key={p.id} persona={p} />
+                        ))}
                       </div>
-                      <div className="bg-black/30 p-3 rounded-lg border border-gray-700">
-                        <dt className="text-xs text-gray-500 mb-1">แม่บ้าน</dt>
-                        <dd className="text-lg font-semibold text-gray-100">{evaluations[idx].housewife_score}</dd>
-                      </div>
-                      <div className="bg-black/30 p-3 rounded-lg border border-gray-700">
-                        <dt className="text-xs text-gray-500 mb-1">เจ้าของธุรกิจ</dt>
-                        <dd className="text-lg font-semibold text-gray-100">{evaluations[idx].businessman_score}</dd>
-                      </div>
-                    </dl>
+                    </div>
                   )}
                 </div>
               </div>

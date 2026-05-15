@@ -9,3 +9,17 @@ compatibility_date = "2025-11-01"
 # Optional non-secret vars (uncomment to restrict CORS):
 # [vars]
 # ALLOWED_ORIGIN = "https://your-frontend.example.com"
+
+# KV namespaces — create once with:
+#   npx wrangler kv:namespace create TRENDS_KV
+#   npx wrangler kv:namespace create JUDGE_KV
+# then paste each returned `id` below.
+# Caching is optional: bindings can be absent and the worker still functions
+# (fresh fetch on every call), just slower.
+[[kv_namespaces]]
+binding = "TRENDS_KV"
+id = "REPLACE_WITH_TRENDS_KV_ID"
+
+[[kv_namespaces]]
+binding = "JUDGE_KV"
+id = "REPLACE_WITH_JUDGE_KV_ID"

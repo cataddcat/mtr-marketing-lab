@@ -83,3 +83,67 @@ export const aiClient = async (
 
   return payload.content;
 };
+
+export interface AiJudgeOptions extends AiClientOptions {
+  /** Stable hash input — same input + same prompt = cached result for 24h server-side. */
+  readonly cacheKeyData: string;
+}
+
+export const aiJudge = async (
+  systemPrompt: string,
+  userPrompt: string,
+  options: AiJudgeOptions,
+): Promise<string> => {
+  if (!PROXY_URL) {
+    throw new AiClientError(
+      'VITE_AI_PROXY_URL is not configured. Set it in .env and restart the dev server.',
+    );
+  }
+
+  const body: Record<string, unknown> = {
+    systemPrompt,
+    userPrompt,
+    cacheKeyData: options.cacheKeyData,
+  };
+  if (options.temperature !== undefined) body.temperature = options.temperature;
+
+  let res: Response;
+  try {
+    res = await fetch(`${PROXY_URL}/judge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: options.signal,
+    });
+  } catch (networkErr) {
+    if (networkErr instanceof DOMException && networkErr.name === 'AbortError') {
+      throw networkErr;
+    }
+    throw new AiClientError(
+      'Network error contacting AI proxy',
+      undefined,
+      networkErr instanceof Error ? networkErr.message : String(networkErr),
+    );
+  }
+
+  let payload: ProxyResponse | null = null;
+  try {
+    payload = (await res.json()) as ProxyResponse;
+  } catch {
+    // non-JSON
+  }
+
+  if (!res.ok) {
+    const message =
+      payload && 'error' in payload && typeof payload.error === 'string'
+        ? payload.error
+        : `Proxy returned HTTP ${res.status}`;
+    throw new AiClientError(message, res.status, payload);
+  }
+
+  if (!payload || !('content' in payload) || typeof payload.content !== 'string') {
+    throw new AiClientError('Proxy returned an unexpected response shape', res.status, payload);
+  }
+
+  return payload.content;
+};
