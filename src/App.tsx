@@ -7,8 +7,10 @@ import { InlineError } from './components/InlineError';
 import { useToast } from './components/Toast';
 import { PersonaScoreCard } from './components/PersonaScoreCard';
 import { BrandFactsPanel } from './components/BrandFactsPanel';
+import { ExamplePicker } from './components/ExamplePicker';
 import { useBrandFacts } from './hooks/useBrandFacts';
 import { PERSONA_LABELS } from './lib/schemas';
+import { PRODUCT_EXAMPLES, PROMO_EXAMPLES } from './lib/example-prompts';
 
 interface SavedAd extends AdIdea {
   id: string;
@@ -279,9 +281,16 @@ ${personaLines}
           className="md:col-span-1 space-y-6 bg-panel p-6 rounded-xl border border-gray-800 h-fit sticky top-6"
         >
           <div>
-            <label htmlFor={productId} className="block text-sm font-medium text-gray-400 mb-2">
-              สินค้า / บริการเป้าหมาย
-            </label>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <label htmlFor={productId} className="block text-sm font-medium text-gray-400">
+                สินค้า / บริการเป้าหมาย
+              </label>
+              <ExamplePicker
+                examples={PRODUCT_EXAMPLES}
+                onPick={setProduct}
+                label="สินค้า"
+              />
+            </div>
             <input
               id={productId}
               type="text"
@@ -293,9 +302,16 @@ ${personaLines}
             />
           </div>
           <div>
-            <label htmlFor={promoId} className="block text-sm font-medium text-gray-400 mb-2">
-              โปรโมชัน / จุดขาย
-            </label>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <label htmlFor={promoId} className="block text-sm font-medium text-gray-400">
+                โปรโมชัน / จุดขาย
+              </label>
+              <ExamplePicker
+                examples={PROMO_EXAMPLES}
+                onPick={setPromo}
+                label="โปรโมชัน"
+              />
+            </div>
             <textarea
               id={promoId}
               value={promo}
