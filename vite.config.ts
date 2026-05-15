@@ -12,8 +12,8 @@ export default defineConfig({
     }
   },
   build: {
-    // ใช้ Rolldown แบบประหยัด RAM
+    // ใช้ Rolldown แบบประหยัด RAM และรองรับ Vite 8
     target: 'esnext',
-    minify: 'esbuild',
+    minify: 'oxc',
   }
 })
