@@ -4,7 +4,7 @@ import type { AdIdea, AdEvaluation, VisualPrompt } from './services/marketing-ag
 import type { RewriteState } from './components/PersonaScoreCard';
 import type { PersonaId, ParsedAdIdea } from './lib/schemas';
 import { fetchTrends, type TrendsSnapshot } from './services/trends';
-import { Loader2, Target, Image as ImageIcon, BarChart, CheckCircle, Copy, Check, Bookmark, Trash2, Download, Palette, TrendingUp, Settings, ThumbsUp, ThumbsDown, Microscope } from 'lucide-react';
+import { Loader2, Target, Image as ImageIcon, BarChart, CheckCircle, Copy, Check, Bookmark, Trash2, Download, Palette, TrendingUp, Settings, ThumbsUp, ThumbsDown, Microscope, MessageSquareQuote } from 'lucide-react';
 import { InlineError } from './components/InlineError';
 import { useToast } from './components/Toast';
 import { PersonaPanelGroup } from './components/PersonaPanelGroup';
@@ -15,8 +15,10 @@ import { CompetitorInput } from './components/CompetitorInput';
 import { CompetitorPanel } from './components/CompetitorPanel';
 import { BrandFactsPanel } from './components/BrandFactsPanel';
 import { BrandFactsBanner } from './components/BrandFactsBanner';
+import { CustomerQuotesPanel } from './components/CustomerQuotesPanel';
 import { ExamplePicker } from './components/ExamplePicker';
 import { useBrandFacts } from './hooks/useBrandFacts';
+import { useCustomerQuotes } from './hooks/useCustomerQuotes';
 import { PERSONA_LABELS } from './lib/schemas';
 import { PRODUCT_EXAMPLES, PROMO_EXAMPLES } from './lib/example-prompts';
 
@@ -37,7 +39,9 @@ const isAbortError = (err: unknown): boolean =>
 export default function App() {
   const toast = useToast();
   const brandFactsApi = useBrandFacts();
+  const customerQuotesApi = useCustomerQuotes();
   const [factsPanelOpen, setFactsPanelOpen] = useState(false);
+  const [quotesPanelOpen, setQuotesPanelOpen] = useState(false);
   const productId = useId();
   const promoId = useId();
   const savedHeadingId = useId();
@@ -160,6 +164,7 @@ export default function App() {
         trends: trendsRef.current,
         brandFacts: brandFactsApi.facts,
         competitorAd,
+        customerQuotes: customerQuotesApi.quotes,
       });
       if (controller.signal.aborted) return;
       if (result) {
@@ -250,6 +255,7 @@ export default function App() {
         trends: trendsRef.current,
         brandFacts: brandFactsApi.facts,
         competitorAd,
+        customerQuotes: customerQuotesApi.quotes,
       });
       if (controller.signal.aborted) return;
       if (result) {
@@ -512,6 +518,14 @@ ${personaLines}
           >
             <Settings className="w-4 h-4" aria-hidden="true" />
             ข้อมูลร้าน ({brandFactsApi.facts.filter(f => f.enabled).length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setQuotesPanelOpen(true)}
+            className="w-full text-sm text-gray-400 hover:text-gray-100 hover:bg-black/30 py-2 min-h-[44px] rounded-md inline-flex items-center justify-center gap-2 transition-colors border border-gray-800"
+          >
+            <MessageSquareQuote className="w-4 h-4" aria-hidden="true" />
+            เสียงลูกค้าจริง ({customerQuotesApi.quotes.filter(q => q.enabled && q.quote.trim().length > 0).length})
           </button>
           <BrandFactsBanner
             facts={brandFactsApi.facts}
@@ -866,6 +880,16 @@ ${personaLines}
         onRemove={brandFactsApi.remove}
         onResetAll={brandFactsApi.resetAll}
         onResetField={brandFactsApi.resetField}
+      />
+      <CustomerQuotesPanel
+        open={quotesPanelOpen}
+        onClose={() => setQuotesPanelOpen(false)}
+        quotes={customerQuotesApi.quotes}
+        onUpdate={customerQuotesApi.update}
+        onAdd={customerQuotesApi.add}
+        onRemove={customerQuotesApi.remove}
+        onResetAll={customerQuotesApi.resetAll}
+        onResetField={customerQuotesApi.resetField}
       />
     </div>
   );

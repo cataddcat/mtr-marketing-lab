@@ -18,7 +18,13 @@ import {
   hashBrandFacts,
   type BrandFact,
 } from '../lib/brand-facts';
+import {
+  formatQuotesForPrompt,
+  hashQuotes,
+  type CustomerQuote,
+} from '../lib/customer-quotes';
 import { buildTimeContextBlock } from '../lib/seasonal-context';
+import { buildNicheContextBlock, filterNicheTrends } from '../lib/niche-seeds';
 
 export type { AdEvaluation, VisualPrompt, PersonaEval, PersonaId } from '../lib/schemas';
 export { personaAverage, PERSONA_LABELS } from '../lib/schemas';
@@ -114,6 +120,7 @@ export const generateAds = async (
 ): Promise<AdIdea[]> => {
   const factsBlock = formatBrandFactsForPrompt(options.brandFacts ?? []);
   const timeBlock = buildTimeContextBlock();
+  const nicheBlock = buildNicheContextBlock();
   const systemPrompt = `คุณคือผู้เชี่ยวชาญการตลาด Facebook + TikTok ในไทย ทำงานให้ธุรกิจ "ม่านธารา" (หน้าร้านอยู่ท่าศาลา ลพบุรี)
 จงสร้างไอเดียโฆษณา 4 สไตล์ — สามสไตล์แรกพูดกับลูกค้าหลัก (พ่อบ้าน-แม่บ้าน-เจ้าของธุรกิจ ในลพบุรี),
 สไตล์ที่ 4 พูดกับ GenZ Thai (อายุ 18-28, อยู่คอนโด/หอ, ติด TikTok, เน้น aesthetic) — ห้ามใช้สำเนียงเดียวกัน
@@ -141,7 +148,7 @@ export const generateAds = async (
   {"style": "พรีเมียม", "copy": "...", "visual_idea": "..."},
   {"style": "สั้นกระชับ", "copy": "...", "visual_idea": "..."},
   {"style": "GenZ-coded", "copy": "...", "visual_idea": "..."}
-]${timeBlock}${factsBlock}`;
+]${timeBlock}${nicheBlock}${factsBlock}`;
 
   const userPrompt = `สินค้า/บริการที่จะโปรโมท: ${productInfo}\nโปรโมชันหรือจุดเด่น: ${promotion}`;
 
@@ -198,15 +205,25 @@ const buildTrendsBlock = (trends: TrendsSnapshot | null): string => {
         .join('\n')}`
     : '';
 
+  const nicheMatches = filterNicheTrends([
+    ...trends.daily_top,
+    ...trends.daily_top_previous,
+  ]);
+  const nicheBlock = nicheMatches.length
+    ? `\n\n⭐ ตรงกับ niche ของม่านธารา (น้ำหนักสูง):\n${[...new Set(nicheMatches)]
+        .map(t => `  ★ ${t}`)
+        .join('\n')}`
+    : '';
+
   const related = trends.related.length
     ? `\n\nที่เกี่ยวข้องกับสินค้านี้: ${trends.related.join(', ')}`
     : '';
 
   return `\n<TRENDS_TODAY date="${trends.cached_at.slice(0, 10)}" geo="TH">
 ตอนนี้${nowTime ? ` (${nowTime})` : ''}:
-${current}${previousBlock}${newBlock}${related}
+${current}${previousBlock}${newBlock}${nicheBlock}${related}
 </TRENDS_TODAY>
-ใช้ block นี้เฉพาะกับ persona GenZ: ให้คะแนน scroll_stop เพิ่มถ้าโฆษณาอ้างอิงเทรนด์ได้แนบเนียน (โดยเฉพาะ "เพิ่งเข้ามาใหม่") หักถ้าใช้ผิดบริบทหรือพยายามเกินไป.
+ใช้ block นี้เฉพาะกับ persona GenZ: ให้คะแนน scroll_stop เพิ่มถ้าโฆษณาอ้างอิงเทรนด์ได้แนบเนียน (โดยเฉพาะ "เพิ่งเข้ามาใหม่" และ "ตรงกับ niche ⭐") หักถ้าใช้ผิดบริบทหรือพยายามเกินไป.
 ห้ามใช้กับ persona พ่อบ้าน/แม่บ้าน/เจ้าของธุรกิจ — พวกเขาไม่ติดเทรนด์ TikTok
 ถ้าใช้เทรนด์ใดในการประเมิน ให้ระบุใน field "trends_used"
 `;
@@ -236,10 +253,13 @@ const buildJudgePrompt = (
   trends: TrendsSnapshot | null,
   brandFacts: readonly BrandFact[],
   competitor: string | null = null,
+  customerQuotes: readonly CustomerQuote[] = [],
 ): string => {
   const trendsBlock = buildTrendsBlock(trends);
   const factsBlock = formatBrandFactsForPrompt(brandFacts);
+  const quotesBlock = formatQuotesForPrompt(customerQuotes);
   const timeBlock = buildTimeContextBlock();
+  const nicheBlock = buildNicheContextBlock();
   const competitorBlock = buildCompetitorBlock(competitor);
   const competitorJsonField = competitor
     ? `,\n  "competitor": {"winner": "ours|theirs|tie", "margin": 0, "ours_strengths": ["..."], "theirs_strengths": ["..."], "recommendation": "..."}`
@@ -342,7 +362,7 @@ reasoning = สั้น ๆ ว่าทำไมเลือก best (~80 ต�
     {"id": "genz",        "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."}
   ],
   "average_score": 0.0${competitorJsonField}
-}${timeBlock}${factsBlock}${competitorBlock}`;
+}${timeBlock}${nicheBlock}${factsBlock}${quotesBlock}${competitorBlock}`;
 };
 
 export interface EvaluateAdOptions {
@@ -355,6 +375,8 @@ export interface EvaluateAdOptions {
   readonly cacheSalt?: string;
   /** Optional competitor ad text — adds comparison block to the output. */
   readonly competitorAd?: string;
+  /** Real customer quotes to ground the Judge with actual voice references. */
+  readonly customerQuotes?: readonly CustomerQuote[];
 }
 
 const hashString = (s: string): string => {
@@ -370,8 +392,9 @@ export const evaluateAd = async (
 ): Promise<AdEvaluation | null> => {
   const trends = options.trends ?? null;
   const brandFacts = options.brandFacts ?? [];
+  const customerQuotes = options.customerQuotes ?? [];
   const competitor = options.competitorAd?.trim() ? options.competitorAd.trim() : null;
-  const systemPrompt = buildJudgePrompt(trends, brandFacts, competitor);
+  const systemPrompt = buildJudgePrompt(trends, brandFacts, competitor, customerQuotes);
 
   const userPrompt = `ประเมินโฆษณาต่อไปนี้:
 ข้อความ: ${ad.copy}
@@ -379,9 +402,10 @@ export const evaluateAd = async (
 
   const trendsDate = trends?.cached_at.slice(0, 10) ?? 'no-trends';
   const factsHash = hashBrandFacts(brandFacts);
+  const quotesHash = hashQuotes(customerQuotes);
   const salt = options.cacheSalt ?? '';
   const compHash = competitor ? hashString(competitor) : '';
-  const cacheKeyData = `${ad.copy}\n${ad.visual_idea}\n${trendsDate}\n${factsHash}\n${salt}\n${compHash}`;
+  const cacheKeyData = `${ad.copy}\n${ad.visual_idea}\n${trendsDate}\n${factsHash}\n${quotesHash}\n${salt}\n${compHash}`;
 
   try {
     return await generateAndExtract({
@@ -543,6 +567,7 @@ export interface EnsembleOptions {
   readonly trends?: TrendsSnapshot | null;
   readonly brandFacts?: readonly BrandFact[];
   readonly competitorAd?: string;
+  readonly customerQuotes?: readonly CustomerQuote[];
   /** Extra runs to perform on top of the baseline (default 2 → 3 total). */
   readonly additionalRuns?: number;
 }
@@ -562,6 +587,7 @@ export const runEnsembleEval = async (
         trends: options.trends,
         brandFacts: options.brandFacts,
         competitorAd: options.competitorAd,
+        customerQuotes: options.customerQuotes,
         cacheSalt: salt,
       }),
     ),
