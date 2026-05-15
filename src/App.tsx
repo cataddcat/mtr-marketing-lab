@@ -236,7 +236,7 @@ ${ad.visual_idea}
   return (
     <div className="min-h-screen p-6 md:p-12 max-w-5xl mx-auto">
       <header className="mb-8 border-b border-gray-800 pb-4">
-        <h1 className="text-3xl font-bold tracking-tight">
+        <h1 className="text-3xl font-bold [letter-spacing:-0.02em]">
           <span className="text-hermes">MTR</span> Marketing Lab
         </h1>
         <p className="text-gray-400 mt-2">AI-Driven Ad Copy &amp; Evaluation System</p>
@@ -318,7 +318,7 @@ ${ad.visual_idea}
             <article
               key={ad.clientId}
               aria-labelledby={headingId}
-              className="bg-panel border border-gray-800 rounded-xl overflow-hidden shadow-lg"
+              className="bg-panel border border-gray-800 rounded-xl overflow-hidden shadow-card"
             >
               <div className="bg-gray-800/50 px-6 py-3 border-b border-gray-800 flex justify-between items-center">
                 <h3 id={headingId} className="font-semibold text-hermes">{ad.style}</h3>
@@ -406,7 +406,7 @@ ${ad.visual_idea}
                             )}
                           </button>
                         </div>
-                        <p className="text-xs text-gray-400 bg-black/50 p-2 rounded">{visualPrompts[idx].ai_prompt}</p>
+                        <p className="text-xs text-gray-400 bg-black/50 p-2 rounded font-mono leading-relaxed">{visualPrompts[idx].ai_prompt}</p>
                       </div>
                       <div>
                         <div className="flex justify-between items-center mb-1">
@@ -424,7 +424,7 @@ ${ad.visual_idea}
                             )}
                           </button>
                         </div>
-                        <p className="text-xs text-gray-400 bg-black/50 p-2 rounded">{visualPrompts[idx].canva_keywords}</p>
+                        <p className="text-xs text-gray-400 bg-black/50 p-2 rounded font-mono leading-relaxed">{visualPrompts[idx].canva_keywords}</p>
                       </div>
                     </div>
                   )}
@@ -503,7 +503,7 @@ ${ad.visual_idea}
                         </span>
                         {savedAd.evaluation && (
                           <span className="text-xs font-semibold bg-green-900/30 text-green-400 px-2 py-1 rounded border border-green-800/50">
-                            Score: {savedAd.evaluation.average_score}/10
+                            Score: {savedAd.evaluation.average_score.toFixed(1)}/10
                           </span>
                         )}
                       </div>
