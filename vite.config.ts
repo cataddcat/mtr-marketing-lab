@@ -14,6 +14,6 @@ export default defineConfig({
   build: {
     // ใช้ Rolldown แบบประหยัด RAM
     target: 'esnext',
-    minify: 'lightningcss' 
+    minify: 'esbuild',
   }
 })
