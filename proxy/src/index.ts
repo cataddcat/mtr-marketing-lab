@@ -14,10 +14,11 @@ interface ChatCompletionResponse {
   choices?: Array<{ message?: { content?: string } }>;
 }
 
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const SAMBANOVA_URL = 'https://api.sambanova.ai/v1/chat/completions';
-const GROQ_MODEL = 'llama-3.1-8b-instant';
-const SAMBANOVA_MODEL = 'Meta-Llama-3.1-405B-Instruct';
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const SAMBANOVA_MODEL = 'Meta-Llama-3.3-70B-Instruct';
+const GROQ_MODEL = 'llama-3.3-70b-versatile';
+
 
 class ProviderError extends Error {
   readonly status?: number;
