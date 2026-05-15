@@ -1,20 +1,26 @@
 import { useState, useEffect, useRef, useId } from 'react';
-import { generateAds, evaluateAd, generateImagePrompt } from './services/marketing-agent';
+import { generateAds, evaluateAd, generateImagePrompt, rewriteAd } from './services/marketing-agent';
 import type { AdIdea, AdEvaluation, VisualPrompt } from './services/marketing-agent';
+import type { RewriteState } from './components/PersonaScoreCard';
+import type { PersonaId, ParsedAdIdea } from './lib/schemas';
 import { fetchTrends, type TrendsSnapshot } from './services/trends';
-import { Loader2, Target, Image as ImageIcon, BarChart, CheckCircle, Copy, Check, Bookmark, Trash2, Download, Palette, TrendingUp, Settings } from 'lucide-react';
+import { Loader2, Target, Image as ImageIcon, BarChart, CheckCircle, Copy, Check, Bookmark, Trash2, Download, Palette, TrendingUp, Settings, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { InlineError } from './components/InlineError';
 import { useToast } from './components/Toast';
 import { PersonaPanelGroup } from './components/PersonaPanelGroup';
 import { BrandFactsPanel } from './components/BrandFactsPanel';
+import { BrandFactsBanner } from './components/BrandFactsBanner';
 import { ExamplePicker } from './components/ExamplePicker';
 import { useBrandFacts } from './hooks/useBrandFacts';
 import { PERSONA_LABELS } from './lib/schemas';
 import { PRODUCT_EXAMPLES, PROMO_EXAMPLES } from './lib/example-prompts';
 
+type Outcome = 'used-good' | 'used-bad';
+
 interface SavedAd extends AdIdea {
   id: string;
   evaluation: AdEvaluation | null;
+  outcome?: Outcome;        // ผู้ใช้ mark หลังเอา ad ไปใช้จริง — feedback loop
 }
 
 const errorMessage = (err: unknown): string =>
@@ -53,7 +59,11 @@ export default function App() {
   const generateAbortRef = useRef<AbortController | null>(null);
   const evalAbortsRef = useRef<Map<number, AbortController>>(new Map());
   const visualAbortsRef = useRef<Map<number, AbortController>>(new Map());
+  const rewriteAbortsRef = useRef<Map<string, AbortController>>(new Map());
   const trendsRef = useRef<TrendsSnapshot | null>(null);
+
+  // keyed by `${ad.clientId}::${personaId}`
+  const [rewrites, setRewrites] = useState<Record<string, RewriteState>>({});
 
   useEffect(() => {
     const localData = localStorage.getItem('mtr_saved_ads');
@@ -69,10 +79,12 @@ export default function App() {
   useEffect(() => {
     const evalAborts = evalAbortsRef.current;
     const visualAborts = visualAbortsRef.current;
+    const rewriteAborts = rewriteAbortsRef.current;
     return () => {
       generateAbortRef.current?.abort();
       evalAborts.forEach(c => c.abort());
       visualAborts.forEach(c => c.abort());
+      rewriteAborts.forEach(c => c.abort());
     };
   }, []);
 
@@ -89,6 +101,9 @@ export default function App() {
     setVisualPrompts({});
     setEvalErrors({});
     setVisualErrors({});
+    setRewrites({});
+    rewriteAbortsRef.current.forEach(c => c.abort());
+    rewriteAbortsRef.current.clear();
     try {
       const [results, trends] = await Promise.all([
         generateAds(product, promo, controller.signal, { brandFacts: brandFactsApi.facts }),
@@ -193,6 +208,45 @@ export default function App() {
     toast.success('คัดลอกข้อความแล้ว');
   };
 
+  const handleCopyRewrite = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success('คัดลอกข้อความแล้ว');
+  };
+
+  const handleRewrite = async (ad: AdIdea, personaId: PersonaId) => {
+    const evaluation = Object.values(evaluations).find(ev =>
+      ev.personas.some(p => p.id === personaId),
+    );
+    const persona = evaluation?.personas.find(p => p.id === personaId);
+    if (!persona) return;
+
+    const key = `${ad.clientId}::${personaId}`;
+    rewriteAbortsRef.current.get(key)?.abort();
+    const controller = new AbortController();
+    rewriteAbortsRef.current.set(key, controller);
+
+    setRewrites(prev => ({ ...prev, [key]: { status: 'loading' } }));
+    try {
+      const result: ParsedAdIdea | null = await rewriteAd(ad, persona, controller.signal, {
+        brandFacts: brandFactsApi.facts,
+      });
+      if (controller.signal.aborted) return;
+      if (result) {
+        setRewrites(prev => ({ ...prev, [key]: { status: 'ready', result } }));
+      } else {
+        setRewrites(prev => ({ ...prev, [key]: { status: 'error' } }));
+      }
+    } catch (err) {
+      if (isAbortError(err)) return;
+      console.error('Failed to rewrite ad:', err);
+      setRewrites(prev => ({ ...prev, [key]: { status: 'error' } }));
+    } finally {
+      if (rewriteAbortsRef.current.get(key) === controller) {
+        rewriteAbortsRef.current.delete(key);
+      }
+    }
+  };
+
   const handleSaveAd = (index: number, ad: AdIdea) => {
     const newSavedAd: SavedAd = {
       ...ad,
@@ -210,6 +264,21 @@ export default function App() {
     setSavedAds(updatedLibrary);
     localStorage.setItem('mtr_saved_ads', JSON.stringify(updatedLibrary));
     toast.info('ลบออกจากคลังแล้ว');
+  };
+
+  const handleToggleOutcome = (id: string, next: Outcome) => {
+    const updated = savedAds.map(ad => {
+      if (ad.id !== id) return ad;
+      // tap same outcome → clear it; otherwise switch
+      const newOutcome: Outcome | undefined = ad.outcome === next ? undefined : next;
+      return { ...ad, outcome: newOutcome };
+    });
+    setSavedAds(updated);
+    localStorage.setItem('mtr_saved_ads', JSON.stringify(updated));
+    const target = updated.find(a => a.id === id);
+    if (target?.outcome === 'used-good') toast.success('บันทึก: ผลดี 👍');
+    else if (target?.outcome === 'used-bad') toast.info('บันทึก: ผลไม่ดี 👎');
+    else toast.info('ล้างสถานะแล้ว');
   };
 
   const handleExportObsidian = (ad: SavedAd) => {
@@ -343,6 +412,10 @@ ${personaLines}
             <Settings className="w-4 h-4" aria-hidden="true" />
             ข้อมูลร้าน ({brandFactsApi.facts.filter(f => f.enabled).length})
           </button>
+          <BrandFactsBanner
+            facts={brandFactsApi.facts}
+            onOpenPanel={() => setFactsPanelOpen(true)}
+          />
         </aside>
 
         <section
@@ -535,7 +608,12 @@ ${personaLines}
                           </p>
                         )}
                       </div>
-                      <PersonaPanelGroup personas={evaluations[idx].personas} />
+                      <PersonaPanelGroup
+                        personas={evaluations[idx].personas}
+                        rewriteStateOf={(pid) => rewrites[`${ad.clientId}::${pid}`]}
+                        onRewrite={(pid) => handleRewrite(ad, pid)}
+                        onCopyRewrite={handleCopyRewrite}
+                      />
                     </div>
                   )}
                 </div>
@@ -576,6 +654,34 @@ ${personaLines}
                       <p className="text-sm text-gray-300 line-clamp-2">{savedAd.copy}</p>
                     </div>
                     <div className="flex items-center gap-2 border-t md:border-t-0 md:border-l border-gray-800 pt-3 md:pt-0 md:pl-4">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleOutcome(savedAd.id, 'used-good')}
+                        aria-label={`บันทึกว่าโฆษณาสไตล์ ${savedAd.style} ใช้แล้วได้ผลดี`}
+                        aria-pressed={savedAd.outcome === 'used-good'}
+                        title="ใช้แล้วผลดี"
+                        className={`inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-md border transition-colors ${
+                          savedAd.outcome === 'used-good'
+                            ? 'bg-green-900/40 border-green-700/50 text-green-300'
+                            : 'bg-transparent border-gray-800 text-gray-500 hover:text-green-300 hover:border-green-800/50'
+                        }`}
+                      >
+                        <ThumbsUp className="w-4 h-4" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleOutcome(savedAd.id, 'used-bad')}
+                        aria-label={`บันทึกว่าโฆษณาสไตล์ ${savedAd.style} ใช้แล้วผลไม่ดี`}
+                        aria-pressed={savedAd.outcome === 'used-bad'}
+                        title="ใช้แล้วผลไม่ดี"
+                        className={`inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-md border transition-colors ${
+                          savedAd.outcome === 'used-bad'
+                            ? 'bg-orange-900/40 border-orange-700/50 text-orange-300'
+                            : 'bg-transparent border-gray-800 text-gray-500 hover:text-orange-300 hover:border-orange-800/50'
+                        }`}
+                      >
+                        <ThumbsDown className="w-4 h-4" aria-hidden="true" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => handleExportObsidian(savedAd)}

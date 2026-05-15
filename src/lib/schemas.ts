@@ -18,11 +18,14 @@ export const PersonaIdSchema = v.picklist([
   'genz',
 ] as const);
 
+export const ConfidenceSchema = v.picklist(['high', 'med', 'low'] as const);
+
 export const PersonaEvalSchema = v.object({
   id: PersonaIdSchema,
   scroll_stop_score: score,
   focused_score: score,
   memory_score: score,
+  confidence: ConfidenceSchema,
   verdict: v.pipe(v.string(), v.maxLength(160)),
   suggestion: v.pipe(v.string(), v.maxLength(200)),
 });
@@ -41,6 +44,7 @@ export const VisualPromptSchema = v.object({
 
 export type ParsedAdIdea = v.InferOutput<typeof AdIdeaSchema>;
 export type PersonaId = v.InferOutput<typeof PersonaIdSchema>;
+export type Confidence = v.InferOutput<typeof ConfidenceSchema>;
 export type PersonaEval = v.InferOutput<typeof PersonaEvalSchema>;
 export type AdEvaluation = v.InferOutput<typeof AdEvaluationSchema>;
 export type VisualPrompt = v.InferOutput<typeof VisualPromptSchema>;

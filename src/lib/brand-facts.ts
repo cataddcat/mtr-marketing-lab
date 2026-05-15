@@ -101,3 +101,17 @@ export const hashBrandFacts = (facts: readonly BrandFact[]): string =>
     .filter(f => f.enabled)
     .map(f => `${f.id}=${f.value}`)
     .join('|');
+
+/**
+ * Detects if a value looks like an unfilled placeholder (e.g. "086-XXX-XXXX",
+ * "???"). Used to warn users before they generate ads with bogus data.
+ */
+const PLACEHOLDER_RE = /X{2,}|\?{2,}|<[^>]+>/i;
+
+export const looksLikePlaceholder = (value: string): boolean =>
+  PLACEHOLDER_RE.test(value);
+
+export const findPlaceholderFacts = (
+  facts: readonly BrandFact[],
+): readonly BrandFact[] =>
+  facts.filter(f => f.enabled && looksLikePlaceholder(f.value));

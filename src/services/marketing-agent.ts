@@ -3,10 +3,13 @@ import { aiClient, aiJudge } from '../lib/ai-config';
 import { extractJson, JsonExtractionError } from '../lib/json-extract';
 import {
   AdIdeaArraySchema,
+  AdIdeaSchema,
   AdEvaluationSchema,
   VisualPromptSchema,
+  PERSONA_LABELS,
   type AdEvaluation,
   type ParsedAdIdea,
+  type PersonaEval,
   type VisualPrompt,
 } from '../lib/schemas';
 import type { TrendsSnapshot } from './trends';
@@ -15,6 +18,7 @@ import {
   hashBrandFacts,
   type BrandFact,
 } from '../lib/brand-facts';
+import { buildTimeContextBlock } from '../lib/seasonal-context';
 
 export type { AdEvaluation, VisualPrompt, PersonaEval, PersonaId } from '../lib/schemas';
 export { personaAverage, PERSONA_LABELS } from '../lib/schemas';
@@ -109,6 +113,7 @@ export const generateAds = async (
   options: GenerateAdsOptions = {},
 ): Promise<AdIdea[]> => {
   const factsBlock = formatBrandFactsForPrompt(options.brandFacts ?? []);
+  const timeBlock = buildTimeContextBlock();
   const systemPrompt = `คุณคือผู้เชี่ยวชาญการตลาด Facebook + TikTok ในไทย ทำงานให้ธุรกิจ "ม่านธารา" (หน้าร้านอยู่ท่าศาลา ลพบุรี)
 จงสร้างไอเดียโฆษณา 4 สไตล์ — สามสไตล์แรกพูดกับลูกค้าหลัก (พ่อบ้าน-แม่บ้าน-เจ้าของธุรกิจ ในลพบุรี),
 สไตล์ที่ 4 พูดกับ GenZ Thai (อายุ 18-28, อยู่คอนโด/หอ, ติด TikTok, เน้น aesthetic) — ห้ามใช้สำเนียงเดียวกัน
@@ -136,7 +141,7 @@ export const generateAds = async (
   {"style": "พรีเมียม", "copy": "...", "visual_idea": "..."},
   {"style": "สั้นกระชับ", "copy": "...", "visual_idea": "..."},
   {"style": "GenZ-coded", "copy": "...", "visual_idea": "..."}
-]${factsBlock}`;
+]${timeBlock}${factsBlock}`;
 
   const userPrompt = `สินค้า/บริการที่จะโปรโมท: ${productInfo}\nโปรโมชันหรือจุดเด่น: ${promotion}`;
 
@@ -213,6 +218,7 @@ const buildJudgePrompt = (
 ): string => {
   const trendsBlock = buildTrendsBlock(trends);
   const factsBlock = formatBrandFactsForPrompt(brandFacts);
+  const timeBlock = buildTimeContextBlock();
   return `คุณคือ Consumer Panel Simulator สำหรับ "ม่านธารา" (ท่าศาลา, ลพบุรี)
 จงสวมบทบาทผู้บริโภค 4 คนนี้พร้อมกัน แต่ละคนเห็นโฆษณานี้ใน feed Facebook/IG/TikTok ขณะอยู่ในบริบทเฉพาะของตัวเอง
 ห้ามให้คะแนน "เฉลี่ยๆ" — ถ้าโฆษณาไม่ตรงกลุ่ม ให้คะแนนต่ำตรงไปตรงมา
@@ -249,6 +255,11 @@ ${trendsBlock}
   memory_score     (0-10)  : ผ่านไป 1 ชั่วโมง ยังจำได้ไหม (retention)
 
 แต่ละ persona ต้องตอบ:
+  confidence    : ความมั่นใจในการประเมิน — "high" / "med" / "low"
+                  high = โฆษณาสื่อสารชัดเจน คุณตัดสินได้แน่นอน
+                  med  = ดูได้บางส่วน แต่บางอย่างยังไม่ชัด
+                  low  = โฆษณาคลุมเครือ ตีความได้หลายแบบ ตัดสินไม่แน่นอน
+                  (ใช้ low อย่างจริงใจถ้าคุณไม่แน่ใจจริงๆ — ดีกว่าให้คะแนนมั่วๆ)
   verdict       : สรุปความรู้สึก 1 ประโยค (ไม่เกิน 100 ตัวอักษร ใช้ภาษาที่ persona ใช้จริง)
   suggestion    : คำแนะนำเฉพาะ 1 ข้อ ที่จะทำให้คะแนนสูงขึ้น (ไม่เกิน 120 ตัวอักษร)
 
@@ -261,13 +272,13 @@ average_score : ค่าเฉลี่ยของ 12 คะแนนย่อ
   "panel_verdict": "...",
   "trends_used": ["..."],
   "personas": [
-    {"id": "family_man",  "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "verdict": "...", "suggestion": "..."},
-    {"id": "housewife",   "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "verdict": "...", "suggestion": "..."},
-    {"id": "businessman", "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "verdict": "...", "suggestion": "..."},
-    {"id": "genz",        "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "verdict": "...", "suggestion": "..."}
+    {"id": "family_man",  "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."},
+    {"id": "housewife",   "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."},
+    {"id": "businessman", "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."},
+    {"id": "genz",        "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."}
   ],
   "average_score": 0.0
-}${factsBlock}`;
+}${timeBlock}${factsBlock}`;
 };
 
 export interface EvaluateAdOptions {
@@ -304,6 +315,65 @@ export const evaluateAd = async (
     });
   } catch (e) {
     logExtractionFailure('evaluateAd', e);
+    return null;
+  }
+};
+
+// ════════════════════════════════════════════════════════════════════
+// rewriteAd — generate a single rewrite of an ad that incorporates one
+// persona's suggestion, keeping the same `style`.
+// ════════════════════════════════════════════════════════════════════
+
+export interface RewriteAdOptions {
+  readonly brandFacts?: readonly BrandFact[];
+}
+
+export const rewriteAd = async (
+  ad: AdIdea,
+  persona: PersonaEval,
+  signal?: AbortSignal,
+  options: RewriteAdOptions = {},
+): Promise<ParsedAdIdea | null> => {
+  const factsBlock = formatBrandFactsForPrompt(options.brandFacts ?? []);
+  const timeBlock = buildTimeContextBlock();
+  const personaLabel = PERSONA_LABELS[persona.id];
+
+  const systemPrompt = `คุณคือ Senior copywriter ของม่านธารา
+จง rewrite โฆษณาตาม feedback ที่ได้จาก consumer persona "${personaLabel}"
+- รักษา style เดิม: "${ad.style}" (ห้ามเปลี่ยน)
+- ปรับ copy + visual_idea ตาม suggestion โดยตรง
+- ห้ามเพิ่มข้อมูลที่ไม่มีใน BRAND_FACTS / context
+- ความยาวใกล้เคียง ad เดิม
+${timeBlock}${factsBlock}
+บังคับตอบเป็น JSON object รูปแบบนี้เท่านั้น ห้ามมีข้อความอื่นผสม:
+{"style": "${ad.style}", "copy": "...", "visual_idea": "..."}`;
+
+  const userPrompt = `ad เดิม:
+copy: ${ad.copy}
+visual_idea: ${ad.visual_idea}
+
+feedback จาก "${personaLabel}":
+- verdict: ${persona.verdict}
+- suggestion: ${persona.suggestion}
+- คะแนน: scroll-stop ${persona.scroll_stop_score} / focused ${persona.focused_score} / memory ${persona.memory_score}
+- confidence: ${persona.confidence}
+
+โปรด rewrite ad ตาม suggestion นี้.`;
+
+  try {
+    const parsed = await generateAndExtract({
+      label: 'rewriteAd',
+      systemPrompt,
+      userPrompt,
+      schema: AdIdeaSchema,
+      kind: 'object',
+      caller: chatCaller,
+      signal,
+    });
+    // force original style (LLM sometimes paraphrases it)
+    return { ...parsed, style: ad.style };
+  } catch (e) {
+    logExtractionFailure('rewriteAd', e);
     return null;
   }
 };

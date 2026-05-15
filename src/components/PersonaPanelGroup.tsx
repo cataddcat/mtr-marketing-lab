@@ -1,13 +1,21 @@
 import { useCallback, useState } from 'react';
 import { ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
-import { PersonaScoreCard } from './PersonaScoreCard';
-import type { PersonaEval } from '../lib/schemas';
+import { PersonaScoreCard, type RewriteState } from './PersonaScoreCard';
+import type { PersonaEval, PersonaId } from '../lib/schemas';
 
 interface Props {
   readonly personas: readonly PersonaEval[];
+  readonly rewriteStateOf?: (personaId: PersonaId) => RewriteState | undefined;
+  readonly onRewrite?: (personaId: PersonaId) => void;
+  readonly onCopyRewrite?: (text: string) => void;
 }
 
-export function PersonaPanelGroup({ personas }: Props) {
+export function PersonaPanelGroup({
+  personas,
+  rewriteStateOf,
+  onRewrite,
+  onCopyRewrite,
+}: Props) {
   const [expanded, setExpanded] = useState(false);
   const toggle = useCallback(() => setExpanded(v => !v), []);
 
@@ -40,6 +48,9 @@ export function PersonaPanelGroup({ personas }: Props) {
             persona={p}
             expanded={expanded}
             onToggle={toggle}
+            rewriteState={rewriteStateOf?.(p.id)}
+            onRewrite={onRewrite ? () => onRewrite(p.id) : undefined}
+            onCopyRewrite={onCopyRewrite}
           />
         ))}
       </div>
