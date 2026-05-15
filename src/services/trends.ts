@@ -2,8 +2,11 @@ import * as v from 'valibot';
 
 const TrendsSchema = v.object({
   daily_top: v.array(v.string()),
+  daily_top_previous: v.array(v.string()),
+  new_in_window: v.array(v.string()),
   related: v.array(v.string()),
   cached_at: v.string(),
+  previous_cached_at: v.nullable(v.string()),
   source: v.picklist(['live', 'cache', 'fallback']),
 });
 

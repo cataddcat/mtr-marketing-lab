@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import {
   PERSONA_LABELS,
@@ -8,6 +8,8 @@ import {
 
 interface Props {
   readonly persona: PersonaEval;
+  readonly expanded: boolean;
+  readonly onToggle: () => void;
 }
 
 const scoreColor = (v: number): string => {
@@ -22,8 +24,7 @@ const barColor = (v: number): string => {
   return 'bg-orange-400/70';
 };
 
-export function PersonaScoreCard({ persona }: Props) {
-  const [expanded, setExpanded] = useState(false);
+export function PersonaScoreCard({ persona, expanded, onToggle }: Props) {
   const detailsId = useId();
   const avg = personaAverage(persona);
 
@@ -31,7 +32,7 @@ export function PersonaScoreCard({ persona }: Props) {
     <div className="bg-black/30 rounded-lg border border-gray-700 overflow-hidden">
       <button
         type="button"
-        onClick={() => setExpanded(v => !v)}
+        onClick={onToggle}
         aria-expanded={expanded}
         aria-controls={detailsId}
         className="w-full p-3 text-left flex items-center justify-between gap-2 min-h-[44px] hover:bg-black/20 transition-colors"

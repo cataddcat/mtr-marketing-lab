@@ -161,16 +161,47 @@ export const generateAds = async (
 // evaluateAd — Mirofish-style 4-persona panel with trends injection
 // ════════════════════════════════════════════════════════════════════
 
+const fmtTime = (iso: string): string => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+};
+
 const buildTrendsBlock = (trends: TrendsSnapshot | null): string => {
   if (!trends || trends.daily_top.length === 0) return '';
-  const top = trends.daily_top.slice(0, 10).map((t, i) => `  ${i + 1}. ${t}`).join('\n');
-  const related = trends.related.length
-    ? `\nที่เกี่ยวข้องกับสินค้านี้: ${trends.related.join(', ')}`
+
+  const nowTime = fmtTime(trends.cached_at);
+  const prevTime = trends.previous_cached_at ? fmtTime(trends.previous_cached_at) : '';
+
+  const current = trends.daily_top
+    .slice(0, 10)
+    .map((t, i) => `  ${i + 1}. ${t}`)
+    .join('\n');
+
+  const previousBlock = trends.daily_top_previous.length
+    ? `\n\nเมื่อ ~30 นาทีก่อน${prevTime ? ` (${prevTime})` : ''}:\n${trends.daily_top_previous
+        .slice(0, 10)
+        .map((t, i) => `  ${i + 1}. ${t}`)
+        .join('\n')}`
     : '';
+
+  const newBlock = trends.new_in_window.length
+    ? `\n\nเพิ่งเข้ามาใหม่ใน 30 นาทีนี้ (สำคัญ — GenZ มักจับเทรนด์ที่กำลังลุก):\n${trends.new_in_window
+        .map(t => `  • ${t}`)
+        .join('\n')}`
+    : '';
+
+  const related = trends.related.length
+    ? `\n\nที่เกี่ยวข้องกับสินค้านี้: ${trends.related.join(', ')}`
+    : '';
+
   return `\n<TRENDS_TODAY date="${trends.cached_at.slice(0, 10)}" geo="TH">
-${top}${related}
+ตอนนี้${nowTime ? ` (${nowTime})` : ''}:
+${current}${previousBlock}${newBlock}${related}
 </TRENDS_TODAY>
-ใช้ block นี้เฉพาะกับ persona GenZ: ให้คะแนน scroll_stop เพิ่มถ้าโฆษณาอ้างอิงเทรนด์ได้แนบเนียน หักถ้าใช้ผิดบริบทหรือพยายามเกินไป.
+ใช้ block นี้เฉพาะกับ persona GenZ: ให้คะแนน scroll_stop เพิ่มถ้าโฆษณาอ้างอิงเทรนด์ได้แนบเนียน (โดยเฉพาะ "เพิ่งเข้ามาใหม่") หักถ้าใช้ผิดบริบทหรือพยายามเกินไป.
 ห้ามใช้กับ persona พ่อบ้าน/แม่บ้าน/เจ้าของธุรกิจ — พวกเขาไม่ติดเทรนด์ TikTok
 ถ้าใช้เทรนด์ใดในการประเมิน ให้ระบุใน field "trends_used"
 `;

@@ -5,7 +5,7 @@ import { fetchTrends, type TrendsSnapshot } from './services/trends';
 import { Loader2, Target, Image as ImageIcon, BarChart, CheckCircle, Copy, Check, Bookmark, Trash2, Download, Palette, TrendingUp, Settings } from 'lucide-react';
 import { InlineError } from './components/InlineError';
 import { useToast } from './components/Toast';
-import { PersonaScoreCard } from './components/PersonaScoreCard';
+import { PersonaPanelGroup } from './components/PersonaPanelGroup';
 import { BrandFactsPanel } from './components/BrandFactsPanel';
 import { ExamplePicker } from './components/ExamplePicker';
 import { useBrandFacts } from './hooks/useBrandFacts';
@@ -520,15 +520,22 @@ ${personaLines}
                         {evaluations[idx].trends_used.length > 0 && (
                           <p className="text-xs text-gray-500 mt-2 flex items-start gap-1.5">
                             <TrendingUp className="w-3 h-3 mt-0.5 shrink-0 text-blue-400" aria-hidden="true" />
-                            <span>เทรนด์: <span className="text-blue-300">{evaluations[idx].trends_used.join(' · ')}</span></span>
+                            <span>เทรนด์ที่ Judge ใช้: <span className="text-blue-300">{evaluations[idx].trends_used.join(' · ')}</span></span>
+                          </p>
+                        )}
+                        {trendsRef.current && trendsRef.current.new_in_window.length > 0 && (
+                          <p
+                            className="text-xs text-gray-500 mt-1.5 flex items-start gap-1.5"
+                            title={trendsRef.current.daily_top_previous.length
+                              ? `ก่อน 30 นาที: ${trendsRef.current.daily_top_previous.slice(0, 5).join(' · ')}`
+                              : undefined}
+                          >
+                            <span className="text-orange-400" aria-hidden="true">🔥</span>
+                            <span>เพิ่งมาแรง (30 นาที): <span className="text-orange-300">{trendsRef.current.new_in_window.slice(0, 5).join(' · ')}</span></span>
                           </p>
                         )}
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        {evaluations[idx].personas.map(p => (
-                          <PersonaScoreCard key={p.id} persona={p} />
-                        ))}
-                      </div>
+                      <PersonaPanelGroup personas={evaluations[idx].personas} />
                     </div>
                   )}
                 </div>
