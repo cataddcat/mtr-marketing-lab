@@ -1,7 +1,5 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -9,24 +7,12 @@ import {
   type ReactNode,
 } from 'react';
 import { CheckCircle, AlertCircle, Info, X } from 'lucide-react';
-
-type ToastKind = 'success' | 'error' | 'info';
-
-interface Toast {
-  readonly id: string;
-  readonly kind: ToastKind;
-  readonly message: string;
-}
-
-interface ToastContextValue {
-  readonly show: (kind: ToastKind, message: string) => void;
-  readonly success: (message: string) => void;
-  readonly error: (message: string) => void;
-  readonly info: (message: string) => void;
-  readonly dismiss: (id: string) => void;
-}
-
-const ToastContext = createContext<ToastContextValue | null>(null);
+import {
+  ToastContext,
+  type Toast,
+  type ToastContextValue,
+  type ToastKind,
+} from './toast-context';
 
 const TOAST_TTL_MS = 3500;
 
@@ -78,12 +64,6 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
       <ToastViewport toasts={toasts} onDismiss={dismiss} />
     </ToastContext.Provider>
   );
-};
-
-export const useToast = (): ToastContextValue => {
-  const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error('useToast must be used within ToastProvider');
-  return ctx;
 };
 
 const KIND_META: Record<ToastKind, { Icon: typeof CheckCircle; classes: string }> = {

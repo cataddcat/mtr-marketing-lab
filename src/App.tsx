@@ -6,7 +6,7 @@ import type { PersonaId, ParsedAdIdea } from './lib/schemas';
 import { fetchTrends, type TrendsSnapshot } from './services/trends';
 import { Loader2, Target, Image as ImageIcon, BarChart, CheckCircle, Copy, Check, Bookmark, Trash2, Download, Palette, TrendingUp, Settings, ThumbsUp, ThumbsDown, Microscope, MessageSquareQuote, LineChart, Languages } from 'lucide-react';
 import { InlineError } from './components/InlineError';
-import { useToast } from './components/Toast';
+import { useToast } from './components/toast-context';
 import { PersonaPanelGroup } from './components/PersonaPanelGroup';
 import { StructureBreakdown } from './components/StructureBreakdown';
 import { ChannelFitPanel } from './components/ChannelFitPanel';
@@ -87,12 +87,21 @@ export default function App() {
 
   useEffect(() => {
     const localData = localStorage.getItem('mtr_saved_ads');
-    if (localData) {
-      try {
-        setSavedAds(JSON.parse(localData));
-      } catch (e) {
-        console.error("Failed to load saved ads");
-      }
+    if (!localData) return;
+    try {
+      const parsed: unknown = JSON.parse(localData);
+      if (!Array.isArray(parsed)) return;
+      // Guard against legacy entries missing required fields — `id` is used
+      // for download filenames and React keys.
+      const valid = parsed.filter(
+        (a): a is SavedAd =>
+          a !== null &&
+          typeof a === 'object' &&
+          typeof (a as { id?: unknown }).id === 'string',
+      );
+      setSavedAds(valid);
+    } catch (err) {
+      console.error('Failed to load saved ads:', err);
     }
   }, []);
 
@@ -955,6 +964,7 @@ ${personaLines}
         const target = performanceTarget ? savedAds.find(a => a.id === performanceTarget) : null;
         return (
           <PerformancePanel
+            key={performanceTarget ?? 'closed'}
             open={target !== null}
             onClose={() => setPerformanceTarget(null)}
             adStyle={target?.style ?? ''}

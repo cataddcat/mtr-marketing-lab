@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import type { BrandFact } from '../lib/brand-facts';
 import { BrandFactRow } from './BrandFactRow';
@@ -28,10 +28,15 @@ export function BrandFactsPanel({
   const dialogRef = useRef<HTMLDivElement>(null);
   const [confirmReset, setConfirmReset] = useState(false);
 
+  const handleClose = useCallback(() => {
+    setConfirmReset(false);
+    onClose();
+  }, [onClose]);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') handleClose();
     };
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
@@ -41,11 +46,7 @@ export function BrandFactsPanel({
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [open, onClose]);
-
-  useEffect(() => {
-    if (!open) setConfirmReset(false);
-  }, [open]);
+  }, [open, handleClose]);
 
   if (!open) return null;
 
@@ -55,7 +56,7 @@ export function BrandFactsPanel({
     <div
       className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center"
       onMouseDown={e => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) handleClose();
       }}
     >
       <div
@@ -69,7 +70,7 @@ export function BrandFactsPanel({
         <header className="relative grid grid-cols-[1fr_auto_1fr] items-center px-3 py-2.5 border-b border-gray-800">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="justify-self-start text-sm text-hermes hover:text-orange-400 font-medium min-h-[44px] px-2"
           >
             เสร็จ

@@ -28,9 +28,15 @@ export type PerformanceMetrics = v.InferOutput<typeof PerformanceMetricsSchema>;
 
 export const isPerformanceEmpty = (p: PerformanceMetrics | undefined): boolean => {
   if (!p) return true;
-  const { notes, recorded_at, ...nums } = p;
-  const hasNumber = Object.values(nums).some(v => typeof v === 'number' && v > 0);
-  const hasNotes = typeof notes === 'string' && notes.trim().length > 0;
+  const hasNumber =
+    (typeof p.reach === 'number' && p.reach > 0) ||
+    (typeof p.impressions === 'number' && p.impressions > 0) ||
+    (typeof p.engagement === 'number' && p.engagement > 0) ||
+    (typeof p.clicks === 'number' && p.clicks > 0) ||
+    (typeof p.saves === 'number' && p.saves > 0) ||
+    (typeof p.shares === 'number' && p.shares > 0) ||
+    (typeof p.cost_thb === 'number' && p.cost_thb > 0);
+  const hasNotes = typeof p.notes === 'string' && p.notes.trim().length > 0;
   return !hasNumber && !hasNotes;
 };
 

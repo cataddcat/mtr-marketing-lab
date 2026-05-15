@@ -29,26 +29,16 @@ export function PerformancePanel({ open, onClose, adStyle, initial, onSave }: Pr
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  const [reach, setReach] = useState('');
-  const [impressions, setImpressions] = useState('');
-  const [clicks, setClicks] = useState('');
-  const [saves, setSaves] = useState('');
-  const [shares, setShares] = useState('');
-  const [engagement, setEngagement] = useState('');
-  const [cost, setCost] = useState('');
-  const [notes, setNotes] = useState('');
-
-  useEffect(() => {
-    if (!open) return;
-    setReach(toStr(initial?.reach));
-    setImpressions(toStr(initial?.impressions));
-    setClicks(toStr(initial?.clicks));
-    setSaves(toStr(initial?.saves));
-    setShares(toStr(initial?.shares));
-    setEngagement(toStr(initial?.engagement));
-    setCost(toStr(initial?.cost_thb));
-    setNotes(initial?.notes ?? '');
-  }, [open, initial]);
+  // State is initialized once on mount — parent re-mounts via `key` when the
+  // target ad changes, so we don't need to sync state with `initial` in an effect.
+  const [reach, setReach] = useState(() => toStr(initial?.reach));
+  const [impressions, setImpressions] = useState(() => toStr(initial?.impressions));
+  const [clicks, setClicks] = useState(() => toStr(initial?.clicks));
+  const [saves, setSaves] = useState(() => toStr(initial?.saves));
+  const [shares, setShares] = useState(() => toStr(initial?.shares));
+  const [engagement, setEngagement] = useState(() => toStr(initial?.engagement));
+  const [cost, setCost] = useState(() => toStr(initial?.cost_thb));
+  const [notes, setNotes] = useState(() => initial?.notes ?? '');
 
   useEffect(() => {
     if (!open) return;
