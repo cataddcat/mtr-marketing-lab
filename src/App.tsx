@@ -8,6 +8,8 @@ import { Loader2, Target, Image as ImageIcon, BarChart, CheckCircle, Copy, Check
 import { InlineError } from './components/InlineError';
 import { useToast } from './components/Toast';
 import { PersonaPanelGroup } from './components/PersonaPanelGroup';
+import { StructureBreakdown } from './components/StructureBreakdown';
+import { ChannelFitPanel } from './components/ChannelFitPanel';
 import { BrandFactsPanel } from './components/BrandFactsPanel';
 import { BrandFactsBanner } from './components/BrandFactsBanner';
 import { ExamplePicker } from './components/ExamplePicker';
@@ -301,6 +303,24 @@ export default function App() {
       ? `\n**เทรนด์ที่ใช้:** ${evalData.trends_used.join(', ')}\n`
       : '';
 
+    const structureLines = evalData
+      ? `\n### 🧱 โครงสร้าง
+- **Hook** (${evalData.structure.hook_score}/10): ${evalData.structure.hook_critique}
+- **Body** (${evalData.structure.body_score}/10): ${evalData.structure.body_critique}
+- **CTA** (${evalData.structure.cta_score}/10): ${evalData.structure.cta_critique}
+`
+      : '';
+
+    const channelLines = evalData
+      ? `\n### 📱 ช่องทางที่เหมาะ
+- **แนะนำ:** ${evalData.channel_fit.best.replace('_', ' ')}
+- **เหตุผล:** ${evalData.channel_fit.reasoning}
+- คะแนนทุกช่อง: ${evalData.channel_fit.ranked
+          .map(r => `${r.channel.replace('_', ' ')} ${r.score}/10`)
+          .join(' · ')}
+`
+      : '';
+
     const mdContent = `---
 title: "MTR Ad - ${ad.style}"
 date: ${date}
@@ -319,7 +339,7 @@ ${ad.visual_idea}
 
 ## 📊 การประเมิน (The Judge)
 ${verdictLine}**คะแนนเฉลี่ย**: ${scoreText}/10
-${trendsLine}
+${trendsLine}${structureLines}${channelLines}
 ${personaLines}
 `;
 
@@ -607,6 +627,10 @@ ${personaLines}
                             <span>เพิ่งมาแรง (30 นาที): <span className="text-orange-300">{trendsRef.current.new_in_window.slice(0, 5).join(' · ')}</span></span>
                           </p>
                         )}
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <StructureBreakdown structure={evaluations[idx].structure} />
+                        <ChannelFitPanel channelFit={evaluations[idx].channel_fit} />
                       </div>
                       <PersonaPanelGroup
                         personas={evaluations[idx].personas}

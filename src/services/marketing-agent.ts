@@ -267,10 +267,49 @@ panel_verdict : สรุปฉันทามติของทั้ง panel 
 trends_used   : array ของเทรนด์ที่ใช้ในการประเมิน (ใส่ [] ถ้าไม่ใช้)
 average_score : ค่าเฉลี่ยของ 12 คะแนนย่อย (3 มิติ × 4 personas) ปัดทศนิยม 1 ตำแหน่ง
 
+═══════════════════════════════════════════════════════════════
+STRUCTURAL ANALYSIS — แยกประเมิน ad copy เป็น 3 ส่วน (ที่ระดับ ad ไม่ใช่ persona):
+  hook_score    : 1-2 บรรทัดแรกที่ตา hit ก่อน — หยุดสายตาได้ไหม specific เพียงพอไหม
+  body_score    : เนื้อหากลาง — มี proof point, ตัวเลข, story arc, persuasion technique
+  cta_score     : ปิดท้ายเรียก action — ชัด, urgent, low-friction
+  hook_critique / body_critique / cta_critique : วิจารณ์ส่วนนั้น 1 ประโยคสั้น
+
+═══════════════════════════════════════════════════════════════
+CHANNEL FIT — ประเมินว่า ad นี้เหมาะกับ channel ไหน (0-10 แต่ละช่อง):
+  facebook_feed    : คอนเทนต์ผสมรูป+ข้อความยาว เห็นเต็ม mobile/desktop ลูกค้าโต-วัยทำงาน
+  facebook_reels   : vertical video 9:16 สั้น เน้น hook 0.5s, voice-on
+  instagram_feed   : aesthetic-first, square/portrait, ลูกค้า aspirational
+  instagram_reels  : vertical video, สาย aesthetic + creator
+  tiktok           : vertical video, sound-on, vibe-first, edit เร็ว
+
+ถ้า ad เน้นข้อความ + รูป → facebook_feed/instagram_feed score สูง
+ถ้า ad เป็น POV/BTS/sound-driven → tiktok/reels score สูง
+ถ้า ad ยาว 4-5 บรรทัด → facebook_feed > reels (เพราะ reels ไม่อ่านข้อความ)
+ranked = list เรียงจากคะแนนสูงสุดลงต่ำ (ใส่ทั้ง 5 ช่อง)
+best = id ของช่อง top 1
+reasoning = สั้น ๆ ว่าทำไมเลือก best (~80 ตัวอักษร)
+
+═══════════════════════════════════════════════════════════════
 บังคับตอบเป็น JSON object รูปแบบนี้เท่านั้น ห้ามมีข้อความอื่นผสม:
 {
   "panel_verdict": "...",
   "trends_used": ["..."],
+  "structure": {
+    "hook_score": 0, "hook_critique": "...",
+    "body_score": 0, "body_critique": "...",
+    "cta_score":  0, "cta_critique":  "..."
+  },
+  "channel_fit": {
+    "ranked": [
+      {"channel": "tiktok",          "score": 0},
+      {"channel": "instagram_reels", "score": 0},
+      {"channel": "facebook_reels",  "score": 0},
+      {"channel": "instagram_feed",  "score": 0},
+      {"channel": "facebook_feed",   "score": 0}
+    ],
+    "best": "tiktok",
+    "reasoning": "..."
+  },
   "personas": [
     {"id": "family_man",  "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."},
     {"id": "housewife",   "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."},
