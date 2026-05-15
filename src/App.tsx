@@ -231,6 +231,7 @@ ${ad.visual_idea}
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+    toast.success('Export เรียบร้อย');
   };
 
   return (
@@ -271,7 +272,7 @@ ${ad.visual_idea}
               onChange={(e) => setPromo(e.target.value)}
               rows={3}
               placeholder="เช่น ประเมินหน้างานฟรี ท่าศาลา-ลพบุรี"
-              className="w-full"
+              className="w-full min-h-[80px] resize-y"
             />
           </div>
           <button
@@ -453,22 +454,22 @@ ${ad.visual_idea}
                       ประเมินความโดนใจ (The Judge)
                     </button>
                   ) : (
-                    <dl className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <div className="bg-black/30 p-3 rounded-lg border border-gray-700">
                         <dt className="text-xs text-gray-500 mb-1">เฉลี่ยรวม</dt>
                         <dd className="text-2xl font-bold text-hermes">{evaluations[idx].average_score.toFixed(1)}/10</dd>
                       </div>
                       <div className="bg-black/30 p-3 rounded-lg border border-gray-700">
                         <dt className="text-xs text-gray-500 mb-1">พ่อบ้าน</dt>
-                        <dd className="text-lg font-semibold">{evaluations[idx].family_man_score}</dd>
+                        <dd className="text-lg font-semibold text-gray-100">{evaluations[idx].family_man_score}</dd>
                       </div>
                       <div className="bg-black/30 p-3 rounded-lg border border-gray-700">
                         <dt className="text-xs text-gray-500 mb-1">แม่บ้าน</dt>
-                        <dd className="text-lg font-semibold">{evaluations[idx].housewife_score}</dd>
+                        <dd className="text-lg font-semibold text-gray-100">{evaluations[idx].housewife_score}</dd>
                       </div>
                       <div className="bg-black/30 p-3 rounded-lg border border-gray-700">
                         <dt className="text-xs text-gray-500 mb-1">เจ้าของธุรกิจ</dt>
-                        <dd className="text-lg font-semibold">{evaluations[idx].businessman_score}</dd>
+                        <dd className="text-lg font-semibold text-gray-100">{evaluations[idx].businessman_score}</dd>
                       </div>
                     </dl>
                   )}
