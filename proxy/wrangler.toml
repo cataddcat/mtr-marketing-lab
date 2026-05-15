@@ -1,0 +1,11 @@
+name = "mtr-marketing-lab-proxy"
+main = "src/index.ts"
+compatibility_date = "2025-11-01"
+
+# Secrets (DO NOT commit values; use `wrangler secret put`):
+#   npx wrangler secret put GROQ_API_KEY
+#   npx wrangler secret put SAMBANOVA_API_KEY
+#
+# Optional non-secret vars (uncomment to restrict CORS):
+# [vars]
+# ALLOWED_ORIGIN = "https://your-frontend.example.com"

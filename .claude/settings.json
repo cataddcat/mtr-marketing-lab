@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(findstr /i proxy)",
+      "Bash(findstr /i env)",
+      "Bash(dir /a \"d:\\\\_Projects\\\\mtr-marketing-lab\")",
+      "Bash(findstr \".env\")",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code} in %{time_total}s\\\\n\" -X POST https://mtr-marketing-lab-proxy.cataddcat.workers.dev/chat -H \"Content-Type: application/json\" -d \"{\\\\\"systemPrompt\\\\\":\\\\\"You are a connectivity test. Reply with exactly the word: OK.\\\\\",\\\\\"userPrompt\\\\\":\\\\\"ping\\\\\"}\")"
+    ]
+  }
+}
