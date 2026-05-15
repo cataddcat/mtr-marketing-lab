@@ -4,7 +4,7 @@ import type { AdIdea, AdEvaluation, VisualPrompt } from './services/marketing-ag
 import type { RewriteState } from './components/PersonaScoreCard';
 import type { PersonaId, ParsedAdIdea } from './lib/schemas';
 import { fetchTrends, type TrendsSnapshot } from './services/trends';
-import { Loader2, Target, Image as ImageIcon, BarChart, CheckCircle, Copy, Check, Bookmark, Trash2, Download, Palette, TrendingUp, Settings, ThumbsUp, ThumbsDown, Microscope, MessageSquareQuote } from 'lucide-react';
+import { Loader2, Target, Image as ImageIcon, BarChart, CheckCircle, Copy, Check, Bookmark, Trash2, Download, Palette, TrendingUp, Settings, ThumbsUp, ThumbsDown, Microscope, MessageSquareQuote, LineChart, Languages } from 'lucide-react';
 import { InlineError } from './components/InlineError';
 import { useToast } from './components/Toast';
 import { PersonaPanelGroup } from './components/PersonaPanelGroup';
@@ -13,6 +13,10 @@ import { ChannelFitPanel } from './components/ChannelFitPanel';
 import { EnsembleBadge } from './components/EnsembleBadge';
 import { CompetitorInput } from './components/CompetitorInput';
 import { CompetitorPanel } from './components/CompetitorPanel';
+import { PerformancePanel } from './components/PerformancePanel';
+import { ImagePreview } from './components/ImagePreview';
+import { TranslatePanel } from './components/TranslatePanel';
+import { isPerformanceEmpty, type PerformanceMetrics } from './lib/performance';
 import { BrandFactsPanel } from './components/BrandFactsPanel';
 import { BrandFactsBanner } from './components/BrandFactsBanner';
 import { CustomerQuotesPanel } from './components/CustomerQuotesPanel';
@@ -27,7 +31,8 @@ type Outcome = 'used-good' | 'used-bad';
 interface SavedAd extends AdIdea {
   id: string;
   evaluation: AdEvaluation | null;
-  outcome?: Outcome;        // ผู้ใช้ mark หลังเอา ad ไปใช้จริง — feedback loop
+  outcome?: Outcome;                       // ผู้ใช้ mark หลังเอา ad ไปใช้จริง — feedback loop
+  performance?: PerformanceMetrics;        // ตัวเลขจริงจาก FB/IG/TikTok หลังลง ad
 }
 
 const errorMessage = (err: unknown): string =>
@@ -42,6 +47,8 @@ export default function App() {
   const customerQuotesApi = useCustomerQuotes();
   const [factsPanelOpen, setFactsPanelOpen] = useState(false);
   const [quotesPanelOpen, setQuotesPanelOpen] = useState(false);
+  const [performanceTarget, setPerformanceTarget] = useState<string | null>(null);
+  const [translateTarget, setTranslateTarget] = useState<string | null>(null);
   const productId = useId();
   const promoId = useId();
   const savedHeadingId = useId();
@@ -330,6 +337,16 @@ export default function App() {
     toast.info('ลบออกจากคลังแล้ว');
   };
 
+  const handleSavePerformance = (id: string, metrics: PerformanceMetrics) => {
+    const updated = savedAds.map(ad => {
+      if (ad.id !== id) return ad;
+      return { ...ad, performance: isPerformanceEmpty(metrics) ? undefined : metrics };
+    });
+    setSavedAds(updated);
+    localStorage.setItem('mtr_saved_ads', JSON.stringify(updated));
+    toast.success('บันทึกผลโฆษณาแล้ว');
+  };
+
   const handleToggleOutcome = (id: string, next: Outcome) => {
     const updated = savedAds.map(ad => {
       if (ad.id !== id) return ad;
@@ -390,6 +407,22 @@ export default function App() {
 `
       : '';
 
+    const performanceLines = !isPerformanceEmpty(ad.performance)
+      ? (() => {
+          const p = ad.performance!;
+          const rows: string[] = [];
+          if (typeof p.reach === 'number') rows.push(`- **Reach:** ${p.reach.toLocaleString('en-US')}`);
+          if (typeof p.impressions === 'number') rows.push(`- **Impressions:** ${p.impressions.toLocaleString('en-US')}`);
+          if (typeof p.clicks === 'number') rows.push(`- **Clicks:** ${p.clicks.toLocaleString('en-US')}`);
+          if (typeof p.saves === 'number') rows.push(`- **Saves:** ${p.saves.toLocaleString('en-US')}`);
+          if (typeof p.shares === 'number') rows.push(`- **Shares:** ${p.shares.toLocaleString('en-US')}`);
+          if (typeof p.engagement === 'number') rows.push(`- **Engagement:** ${p.engagement.toLocaleString('en-US')}`);
+          if (typeof p.cost_thb === 'number') rows.push(`- **Cost:** ฿${p.cost_thb.toLocaleString('en-US')}`);
+          if (p.notes) rows.push(`- **Notes:** ${p.notes}`);
+          return rows.length > 0 ? `\n### 📈 ผลโฆษณาจริง\n${rows.join('\n')}\n` : '';
+        })()
+      : '';
+
     const competitorLines = evalData?.competitor
       ? `\n### ⚔️ เทียบกับ ad คู่แข่ง
 - **ผล:** ${
@@ -425,7 +458,7 @@ ${ad.visual_idea}
 
 ## 📊 การประเมิน (The Judge)
 ${verdictLine}**คะแนนเฉลี่ย**: ${scoreText}/10
-${ensembleLine}${trendsLine}${structureLines}${channelLines}${competitorLines}
+${ensembleLine}${trendsLine}${structureLines}${channelLines}${competitorLines}${performanceLines}
 ${personaLines}
 `;
 
@@ -669,6 +702,10 @@ ${personaLines}
                         </div>
                         <p className="text-xs text-gray-400 bg-black/50 p-2 rounded font-mono leading-relaxed">{visualPrompts[idx].canva_keywords}</p>
                       </div>
+                      <ImagePreview
+                        prompt={visualPrompts[idx].ai_prompt}
+                        downloadName={`mtr-preview-${ad.style.replace(/\s+/g, '-')}.png`}
+                      />
                     </div>
                   )}
                 </div>
@@ -834,6 +871,20 @@ ${personaLines}
                       </button>
                       <button
                         type="button"
+                        onClick={() => setPerformanceTarget(savedAd.id)}
+                        aria-label={`บันทึกผลโฆษณาของสไตล์ ${savedAd.style}`}
+                        aria-pressed={!isPerformanceEmpty(savedAd.performance)}
+                        title="บันทึกผลโฆษณา (Reach/CTR/Cost)"
+                        className={`inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-md border transition-colors ${
+                          !isPerformanceEmpty(savedAd.performance)
+                            ? 'bg-hermes/15 border-hermes/40 text-hermes'
+                            : 'bg-transparent border-gray-800 text-gray-500 hover:text-hermes hover:border-hermes/30'
+                        }`}
+                      >
+                        <LineChart className="w-4 h-4" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleExportObsidian(savedAd)}
                         aria-label={`ส่งออกโฆษณาสไตล์ ${savedAd.style} เป็นไฟล์ Markdown`}
                         title="Export to Obsidian (.md)"
@@ -852,6 +903,15 @@ ${personaLines}
                         className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] bg-gray-800 hover:bg-gray-700 rounded-md transition-colors"
                       >
                         <Copy className="w-4 h-4 text-gray-300" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTranslateTarget(savedAd.id)}
+                        aria-label={`แปลโฆษณาสไตล์ ${savedAd.style}`}
+                        title="แปลเป็น EN / 中文"
+                        className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] bg-gray-800 hover:bg-gray-700 rounded-md transition-colors"
+                      >
+                        <Languages className="w-4 h-4 text-gray-300" aria-hidden="true" />
                       </button>
                       <button
                         type="button"
@@ -891,6 +951,31 @@ ${personaLines}
         onResetAll={customerQuotesApi.resetAll}
         onResetField={customerQuotesApi.resetField}
       />
+      {(() => {
+        const target = performanceTarget ? savedAds.find(a => a.id === performanceTarget) : null;
+        return (
+          <PerformancePanel
+            open={target !== null}
+            onClose={() => setPerformanceTarget(null)}
+            adStyle={target?.style ?? ''}
+            initial={target?.performance}
+            onSave={metrics => {
+              if (target) handleSavePerformance(target.id, metrics);
+            }}
+          />
+        );
+      })()}
+      {(() => {
+        const target = translateTarget ? savedAds.find(a => a.id === translateTarget) ?? null : null;
+        return (
+          <TranslatePanel
+            open={target !== null}
+            onClose={() => setTranslateTarget(null)}
+            ad={target}
+            onCopy={handleCopyRewrite}
+          />
+        );
+      })()}
     </div>
   );
 }

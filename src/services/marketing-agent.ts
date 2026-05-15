@@ -661,6 +661,78 @@ feedback จาก "${personaLabel}":
 };
 
 // ════════════════════════════════════════════════════════════════════
+// translateAd — translate the Thai ad copy + visual_idea into another language
+// (English / Chinese) for foreign customers or international portfolio. Style
+// label stays in Thai (it's a brand voice marker, not a translatable string).
+// ════════════════════════════════════════════════════════════════════
+
+export type TargetLanguage = 'en' | 'zh';
+
+export const LANGUAGE_LABEL: Record<TargetLanguage, string> = {
+  en: 'English',
+  zh: '中文 (Mandarin)',
+};
+
+export interface TranslatedAd {
+  readonly language: TargetLanguage;
+  readonly copy: string;
+  readonly visual_idea: string;
+}
+
+const TranslatedAdSchema = v.object({
+  copy: v.pipe(v.string(), v.minLength(1)),
+  visual_idea: v.pipe(v.string(), v.minLength(1)),
+});
+
+export const translateAd = async (
+  ad: AdIdea,
+  language: TargetLanguage,
+  signal?: AbortSignal,
+): Promise<TranslatedAd | null> => {
+  const langName = language === 'en' ? 'natural conversational English' : 'simplified Mandarin Chinese (简体中文)';
+  const audienceHint =
+    language === 'en'
+      ? 'Target: expat or tourist customers near Lopburi. Keep idiomatic & warm — not corporate.'
+      : 'Target audience: 中国游客或来泰国的中国人. 口语化, 不要正式套话.';
+
+  const systemPrompt = `You translate Thai Facebook/TikTok ads into ${langName} for "ม่านธารา", a curtain shop in Lopburi, Thailand.
+
+Rules:
+- Translate "copy" and "visual_idea" only. Keep the meaning, tone, and call-to-action.
+- DO NOT translate the brand name "ม่านธารา" / "Marnthara" — leave it as the romanization "Marnthara".
+- Preserve emojis if present (🪟 🕯️ 🌙 etc.).
+- Keep line breaks where they matter for readability.
+- ${audienceHint}
+
+Output strictly this JSON, no extra text:
+{"copy": "...", "visual_idea": "..."}`;
+
+  const userPrompt = `Translate this ad into ${langName}:
+
+copy:
+${ad.copy}
+
+visual_idea:
+${ad.visual_idea}`;
+
+  try {
+    const parsed = await generateAndExtract({
+      label: `translateAd[${language}]`,
+      systemPrompt,
+      userPrompt,
+      schema: TranslatedAdSchema,
+      kind: 'object',
+      caller: chatCaller,
+      signal,
+    });
+    return { language, copy: parsed.copy, visual_idea: parsed.visual_idea };
+  } catch (e) {
+    logExtractionFailure(`translateAd[${language}]`, e);
+    return null;
+  }
+};
+
+// ════════════════════════════════════════════════════════════════════
 // generateImagePrompt — unchanged
 // ════════════════════════════════════════════════════════════════════
 

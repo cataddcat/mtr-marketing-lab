@@ -1,5 +1,6 @@
 import { fetchTrends } from './trends';
 import { readJudgeCache, writeJudgeCache, type JudgeRequest } from './judge-cache';
+import { generateImage, type ImageRequest } from './image';
 
 export interface Env {
   GROQ_API_KEY: string;
@@ -7,6 +8,8 @@ export interface Env {
   ALLOWED_ORIGIN?: string;
   TRENDS_KV?: KVNamespace;
   JUDGE_KV?: KVNamespace;
+  IMAGE_KV?: KVNamespace;
+  AI?: Ai;
 }
 
 interface ChatRequest {
@@ -245,6 +248,32 @@ async function handleTrends(
   return jsonResponse(snap, 200, headers);
 }
 
+async function handleImage(
+  req: Request,
+  env: Env,
+  headers: Record<string, string>,
+): Promise<Response> {
+  let body: ImageRequest;
+  try {
+    body = (await req.json()) as ImageRequest;
+  } catch {
+    return jsonResponse({ error: 'Invalid JSON body' }, 400, headers);
+  }
+  if (typeof body.prompt !== 'string') {
+    return jsonResponse({ error: 'prompt must be a string' }, 400, headers);
+  }
+  const result = await generateImage(env, body);
+  if ('error' in result) {
+    return jsonResponse({ error: result.error }, 502, headers);
+  }
+  return jsonResponse(
+    { image: result.image, cached: result.cached },
+    200,
+    headers,
+    { 'X-Cache': result.cached ? 'HIT' : 'MISS' },
+  );
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const allowedOrigin = env.ALLOWED_ORIGIN ?? '*';
@@ -264,6 +293,7 @@ export default {
             chat: 'POST /chat',
             judge: 'POST /judge',
             trends: 'GET /trends?q=<query>',
+            image: 'POST /image',
           },
         },
         200,
@@ -281,6 +311,10 @@ export default {
 
     if (req.method === 'POST' && url.pathname === '/judge') {
       return handleJudge(req, env, headers);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/image') {
+      return handleImage(req, env, headers);
     }
 
     return jsonResponse(

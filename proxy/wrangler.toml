@@ -23,3 +23,8 @@ id = "e0e6345e84a54feb9b1f592e7cac43f9"
 [[kv_namespaces]]
 binding = "JUDGE_KV"
 id = "8e994f5341a348418c3411f698e587bf"
+
+# Workers AI — provides FLUX-Schnell (free tier: ~66 images/day) for visual previews.
+# No setup needed; binding is automatic once `wrangler deploy` runs.
+[ai]
+binding = "AI"
