@@ -53,7 +53,7 @@ function jsonResponse(
 ): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...headers, 'Content-Type': 'application/json', ...extra },
+    headers: { ...headers, 'Content-Type': 'application/json; charset=utf-8', ...extra },
   });
 }
 
@@ -67,7 +67,7 @@ async function callProvider(
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/json; charset=utf-8',
     },
     body: JSON.stringify({
       model,
@@ -211,7 +211,7 @@ async function handleJudge(
   if (hit) {
     return new Response(hit, {
       status: 200,
-      headers: { ...headers, 'Content-Type': 'application/json', 'X-Cache': 'HIT' },
+      headers: { ...headers, 'Content-Type': 'application/json; charset=utf-8', 'X-Cache': 'HIT' },
     });
   }
 
@@ -224,7 +224,7 @@ async function handleJudge(
     await writeJudgeCache(env.JUDGE_KV, key, payload);
     return new Response(payload, {
       status: 200,
-      headers: { ...headers, 'Content-Type': 'application/json', 'X-Cache': 'MISS' },
+      headers: { ...headers, 'Content-Type': 'application/json; charset=utf-8', 'X-Cache': 'MISS' },
     });
   } catch (err) {
     return jsonResponse(
