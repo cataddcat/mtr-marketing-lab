@@ -2,10 +2,12 @@ import { useState, useEffect, useRef, useId } from 'react';
 import { generateAds, evaluateAd, generateImagePrompt } from './services/marketing-agent';
 import type { AdIdea, AdEvaluation, VisualPrompt } from './services/marketing-agent';
 import { fetchTrends, type TrendsSnapshot } from './services/trends';
-import { Loader2, Target, Image as ImageIcon, BarChart, CheckCircle, Copy, Check, Bookmark, Trash2, Download, Palette, TrendingUp } from 'lucide-react';
+import { Loader2, Target, Image as ImageIcon, BarChart, CheckCircle, Copy, Check, Bookmark, Trash2, Download, Palette, TrendingUp, Settings } from 'lucide-react';
 import { InlineError } from './components/InlineError';
 import { useToast } from './components/Toast';
 import { PersonaScoreCard } from './components/PersonaScoreCard';
+import { BrandFactsPanel } from './components/BrandFactsPanel';
+import { useBrandFacts } from './hooks/useBrandFacts';
 import { PERSONA_LABELS } from './lib/schemas';
 
 interface SavedAd extends AdIdea {
@@ -21,6 +23,8 @@ const isAbortError = (err: unknown): boolean =>
 
 export default function App() {
   const toast = useToast();
+  const brandFactsApi = useBrandFacts();
+  const [factsPanelOpen, setFactsPanelOpen] = useState(false);
   const productId = useId();
   const promoId = useId();
   const savedHeadingId = useId();
@@ -85,7 +89,7 @@ export default function App() {
     setVisualErrors({});
     try {
       const [results, trends] = await Promise.all([
-        generateAds(product, promo, controller.signal),
+        generateAds(product, promo, controller.signal, { brandFacts: brandFactsApi.facts }),
         fetchTrends(product, controller.signal),
       ]);
       if (controller.signal.aborted) return;
@@ -120,7 +124,10 @@ export default function App() {
       return next;
     });
     try {
-      const result = await evaluateAd(ad, controller.signal, { trends: trendsRef.current });
+      const result = await evaluateAd(ad, controller.signal, {
+        trends: trendsRef.current,
+        brandFacts: brandFactsApi.facts,
+      });
       if (controller.signal.aborted) return;
       if (result) {
         setEvaluations(prev => ({ ...prev, [index]: result }));
@@ -311,6 +318,14 @@ ${personaLines}
               <Target className="w-5 h-5" aria-hidden="true" />
             )}
             {loading ? 'Processing...' : 'Generate Ads'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setFactsPanelOpen(true)}
+            className="w-full text-sm text-gray-400 hover:text-gray-100 hover:bg-black/30 py-2 min-h-[44px] rounded-md inline-flex items-center justify-center gap-2 transition-colors border border-gray-800"
+          >
+            <Settings className="w-4 h-4" aria-hidden="true" />
+            ข้อมูลร้าน ({brandFactsApi.facts.filter(f => f.enabled).length})
           </button>
         </aside>
 
@@ -576,6 +591,17 @@ ${personaLines}
           )}
         </section>
       </main>
+
+      <BrandFactsPanel
+        open={factsPanelOpen}
+        onClose={() => setFactsPanelOpen(false)}
+        facts={brandFactsApi.facts}
+        onUpdate={brandFactsApi.update}
+        onAdd={brandFactsApi.add}
+        onRemove={brandFactsApi.remove}
+        onResetAll={brandFactsApi.resetAll}
+        onResetField={brandFactsApi.resetField}
+      />
     </div>
   );
 }

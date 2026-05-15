@@ -10,6 +10,11 @@ import {
   type VisualPrompt,
 } from '../lib/schemas';
 import type { TrendsSnapshot } from './trends';
+import {
+  formatBrandFactsForPrompt,
+  hashBrandFacts,
+  type BrandFact,
+} from '../lib/brand-facts';
 
 export type { AdEvaluation, VisualPrompt, PersonaEval, PersonaId } from '../lib/schemas';
 export { personaAverage, PERSONA_LABELS } from '../lib/schemas';
@@ -93,11 +98,17 @@ const judgeCallerFor = (cacheKeyData: string): Caller =>
 // generateAds — 4 styles (3 classic + GenZ-coded)
 // ════════════════════════════════════════════════════════════════════
 
+export interface GenerateAdsOptions {
+  readonly brandFacts?: readonly BrandFact[];
+}
+
 export const generateAds = async (
   productInfo: string,
   promotion: string,
   signal?: AbortSignal,
+  options: GenerateAdsOptions = {},
 ): Promise<AdIdea[]> => {
+  const factsBlock = formatBrandFactsForPrompt(options.brandFacts ?? []);
   const systemPrompt = `คุณคือผู้เชี่ยวชาญการตลาด Facebook + TikTok ในไทย ทำงานให้ธุรกิจ "ม่านธารา" (หน้าร้านอยู่ท่าศาลา ลพบุรี)
 จงสร้างไอเดียโฆษณา 4 สไตล์ — สามสไตล์แรกพูดกับลูกค้าหลัก (พ่อบ้าน-แม่บ้าน-เจ้าของธุรกิจ ในลพบุรี),
 สไตล์ที่ 4 พูดกับ GenZ Thai (อายุ 18-28, อยู่คอนโด/หอ, ติด TikTok, เน้น aesthetic) — ห้ามใช้สำเนียงเดียวกัน
@@ -125,7 +136,7 @@ export const generateAds = async (
   {"style": "พรีเมียม", "copy": "...", "visual_idea": "..."},
   {"style": "สั้นกระชับ", "copy": "...", "visual_idea": "..."},
   {"style": "GenZ-coded", "copy": "...", "visual_idea": "..."}
-]`;
+]${factsBlock}`;
 
   const userPrompt = `สินค้า/บริการที่จะโปรโมท: ${productInfo}\nโปรโมชันหรือจุดเด่น: ${promotion}`;
 
@@ -165,8 +176,12 @@ ${top}${related}
 `;
 };
 
-const buildJudgePrompt = (trends: TrendsSnapshot | null): string => {
+const buildJudgePrompt = (
+  trends: TrendsSnapshot | null,
+  brandFacts: readonly BrandFact[],
+): string => {
   const trendsBlock = buildTrendsBlock(trends);
+  const factsBlock = formatBrandFactsForPrompt(brandFacts);
   return `คุณคือ Consumer Panel Simulator สำหรับ "ม่านธารา" (ท่าศาลา, ลพบุรี)
 จงสวมบทบาทผู้บริโภค 4 คนนี้พร้อมกัน แต่ละคนเห็นโฆษณานี้ใน feed Facebook/IG/TikTok ขณะอยู่ในบริบทเฉพาะของตัวเอง
 ห้ามให้คะแนน "เฉลี่ยๆ" — ถ้าโฆษณาไม่ตรงกลุ่ม ให้คะแนนต่ำตรงไปตรงมา
@@ -221,11 +236,12 @@ average_score : ค่าเฉลี่ยของ 12 คะแนนย่อ
     {"id": "genz",        "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "verdict": "...", "suggestion": "..."}
   ],
   "average_score": 0.0
-}`;
+}${factsBlock}`;
 };
 
 export interface EvaluateAdOptions {
   readonly trends?: TrendsSnapshot | null;
+  readonly brandFacts?: readonly BrandFact[];
 }
 
 export const evaluateAd = async (
@@ -234,14 +250,16 @@ export const evaluateAd = async (
   options: EvaluateAdOptions = {},
 ): Promise<AdEvaluation | null> => {
   const trends = options.trends ?? null;
-  const systemPrompt = buildJudgePrompt(trends);
+  const brandFacts = options.brandFacts ?? [];
+  const systemPrompt = buildJudgePrompt(trends, brandFacts);
 
   const userPrompt = `ประเมินโฆษณาต่อไปนี้:
 ข้อความ: ${ad.copy}
 ภาพ: ${ad.visual_idea}`;
 
   const trendsDate = trends?.cached_at.slice(0, 10) ?? 'no-trends';
-  const cacheKeyData = `${ad.copy}\n${ad.visual_idea}\n${trendsDate}`;
+  const factsHash = hashBrandFacts(brandFacts);
+  const cacheKeyData = `${ad.copy}\n${ad.visual_idea}\n${trendsDate}\n${factsHash}`;
 
   try {
     return await generateAndExtract({
