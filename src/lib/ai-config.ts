@@ -133,6 +133,18 @@ export const aiJudge = async (
     // non-JSON
   }
 
+  if (res.status === 404) {
+    // Worker hasn't been redeployed with the /judge endpoint yet — fall back to /chat
+    // (no server-side cache, but functionally equivalent). Logs so we notice.
+    console.warn(
+      '[aiJudge] /judge endpoint returned 404 — falling back to /chat. Deploy the proxy worker to enable server-side judge caching.',
+    );
+    return aiClient(systemPrompt, userPrompt, {
+      signal: options.signal,
+      temperature: options.temperature,
+    });
+  }
+
   if (!res.ok) {
     const message =
       payload && 'error' in payload && typeof payload.error === 'string'

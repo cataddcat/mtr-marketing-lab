@@ -18,8 +18,8 @@ compatibility_date = "2025-11-01"
 # (fresh fetch on every call), just slower.
 [[kv_namespaces]]
 binding = "TRENDS_KV"
-id = "REPLACE_WITH_TRENDS_KV_ID"
+id = "e0e6345e84a54feb9b1f592e7cac43f9"
 
 [[kv_namespaces]]
 binding = "JUDGE_KV"
-id = "REPLACE_WITH_JUDGE_KV_ID"
+id = "8e994f5341a348418c3411f698e587bf"
