@@ -58,6 +58,32 @@ export const ChannelFitSchema = v.object({
   reasoning: v.pipe(v.string(), v.maxLength(240)),
 });
 
+export const VarianceSchema = v.object({
+  max_std: v.number(),
+  unstable_fields: v.array(v.string()),
+});
+
+export const EnsembleMetaSchema = v.object({
+  runs: v.pipe(v.number(), v.minValue(1)),
+  variance: VarianceSchema,
+});
+
+export const WinnerSchema = v.picklist(['ours', 'theirs', 'tie'] as const);
+
+export const CompetitorComparisonSchema = v.object({
+  winner: WinnerSchema,
+  margin: score,
+  ours_strengths: v.pipe(
+    v.array(v.pipe(v.string(), v.maxLength(160))),
+    v.maxLength(5),
+  ),
+  theirs_strengths: v.pipe(
+    v.array(v.pipe(v.string(), v.maxLength(160))),
+    v.maxLength(5),
+  ),
+  recommendation: v.pipe(v.string(), v.maxLength(280)),
+});
+
 export const AdEvaluationSchema = v.object({
   panel_verdict: v.pipe(v.string(), v.maxLength(200)),
   trends_used: v.array(v.string()),
@@ -65,6 +91,12 @@ export const AdEvaluationSchema = v.object({
   channel_fit: ChannelFitSchema,
   personas: v.pipe(v.array(PersonaEvalSchema), v.length(4)),
   average_score: score,
+  // Optional client-side metadata — never produced by the LLM. Set after
+  // aggregating multiple judge runs (ensemble) so the UI can show stability.
+  ensemble: v.optional(EnsembleMetaSchema),
+  // Optional comparison block — produced by the LLM only when a competitor
+  // ad text is supplied to evaluateAd().
+  competitor: v.optional(CompetitorComparisonSchema),
 });
 
 export const VisualPromptSchema = v.object({
@@ -80,6 +112,10 @@ export type StructureScore = v.InferOutput<typeof StructureScoreSchema>;
 export type ChannelId = v.InferOutput<typeof ChannelIdSchema>;
 export type ChannelFitItem = v.InferOutput<typeof ChannelFitItemSchema>;
 export type ChannelFit = v.InferOutput<typeof ChannelFitSchema>;
+export type Variance = v.InferOutput<typeof VarianceSchema>;
+export type EnsembleMeta = v.InferOutput<typeof EnsembleMetaSchema>;
+export type Winner = v.InferOutput<typeof WinnerSchema>;
+export type CompetitorComparison = v.InferOutput<typeof CompetitorComparisonSchema>;
 export type AdEvaluation = v.InferOutput<typeof AdEvaluationSchema>;
 export type VisualPrompt = v.InferOutput<typeof VisualPromptSchema>;
 

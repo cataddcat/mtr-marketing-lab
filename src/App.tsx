@@ -1,15 +1,18 @@
 import { useState, useEffect, useRef, useId } from 'react';
-import { generateAds, evaluateAd, generateImagePrompt, rewriteAd } from './services/marketing-agent';
+import { generateAds, evaluateAd, generateImagePrompt, rewriteAd, runEnsembleEval } from './services/marketing-agent';
 import type { AdIdea, AdEvaluation, VisualPrompt } from './services/marketing-agent';
 import type { RewriteState } from './components/PersonaScoreCard';
 import type { PersonaId, ParsedAdIdea } from './lib/schemas';
 import { fetchTrends, type TrendsSnapshot } from './services/trends';
-import { Loader2, Target, Image as ImageIcon, BarChart, CheckCircle, Copy, Check, Bookmark, Trash2, Download, Palette, TrendingUp, Settings, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Loader2, Target, Image as ImageIcon, BarChart, CheckCircle, Copy, Check, Bookmark, Trash2, Download, Palette, TrendingUp, Settings, ThumbsUp, ThumbsDown, Microscope } from 'lucide-react';
 import { InlineError } from './components/InlineError';
 import { useToast } from './components/Toast';
 import { PersonaPanelGroup } from './components/PersonaPanelGroup';
 import { StructureBreakdown } from './components/StructureBreakdown';
 import { ChannelFitPanel } from './components/ChannelFitPanel';
+import { EnsembleBadge } from './components/EnsembleBadge';
+import { CompetitorInput } from './components/CompetitorInput';
+import { CompetitorPanel } from './components/CompetitorPanel';
 import { BrandFactsPanel } from './components/BrandFactsPanel';
 import { BrandFactsBanner } from './components/BrandFactsBanner';
 import { ExamplePicker } from './components/ExamplePicker';
@@ -41,6 +44,7 @@ export default function App() {
   const resultsHeadingId = useId();
   const [product, setProduct] = useState('');
   const [promo, setPromo] = useState('');
+  const [competitorAd, setCompetitorAd] = useState('');
   const [ads, setAds] = useState<AdIdea[]>([]);
   const [loading, setLoading] = useState(false);
   
@@ -62,10 +66,13 @@ export default function App() {
   const evalAbortsRef = useRef<Map<number, AbortController>>(new Map());
   const visualAbortsRef = useRef<Map<number, AbortController>>(new Map());
   const rewriteAbortsRef = useRef<Map<string, AbortController>>(new Map());
+  const ensembleAbortsRef = useRef<Map<number, AbortController>>(new Map());
   const trendsRef = useRef<TrendsSnapshot | null>(null);
 
   // keyed by `${ad.clientId}::${personaId}`
   const [rewrites, setRewrites] = useState<Record<string, RewriteState>>({});
+  const [ensembleLoading, setEnsembleLoading] = useState<number | null>(null);
+  const [ensembleErrors, setEnsembleErrors] = useState<Record<number, string>>({});
 
   useEffect(() => {
     const localData = localStorage.getItem('mtr_saved_ads');
@@ -82,11 +89,13 @@ export default function App() {
     const evalAborts = evalAbortsRef.current;
     const visualAborts = visualAbortsRef.current;
     const rewriteAborts = rewriteAbortsRef.current;
+    const ensembleAborts = ensembleAbortsRef.current;
     return () => {
       generateAbortRef.current?.abort();
       evalAborts.forEach(c => c.abort());
       visualAborts.forEach(c => c.abort());
       rewriteAborts.forEach(c => c.abort());
+      ensembleAborts.forEach(c => c.abort());
     };
   }, []);
 
@@ -106,6 +115,10 @@ export default function App() {
     setRewrites({});
     rewriteAbortsRef.current.forEach(c => c.abort());
     rewriteAbortsRef.current.clear();
+    setEnsembleLoading(null);
+    setEnsembleErrors({});
+    ensembleAbortsRef.current.forEach(c => c.abort());
+    ensembleAbortsRef.current.clear();
     try {
       const [results, trends] = await Promise.all([
         generateAds(product, promo, controller.signal, { brandFacts: brandFactsApi.facts }),
@@ -146,6 +159,7 @@ export default function App() {
       const result = await evaluateAd(ad, controller.signal, {
         trends: trendsRef.current,
         brandFacts: brandFactsApi.facts,
+        competitorAd,
       });
       if (controller.signal.aborted) return;
       if (result) {
@@ -213,6 +227,48 @@ export default function App() {
   const handleCopyRewrite = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success('คัดลอกข้อความแล้ว');
+  };
+
+  const handleRunEnsemble = async (idx: number, ad: AdIdea) => {
+    const baseline = evaluations[idx];
+    if (!baseline || baseline.ensemble) return;
+
+    ensembleAbortsRef.current.get(idx)?.abort();
+    const controller = new AbortController();
+    ensembleAbortsRef.current.set(idx, controller);
+
+    setEnsembleLoading(idx);
+    setEnsembleErrors(prev => {
+      if (!(idx in prev)) return prev;
+      const next = { ...prev };
+      delete next[idx];
+      return next;
+    });
+
+    try {
+      const result = await runEnsembleEval(ad, baseline, controller.signal, {
+        trends: trendsRef.current,
+        brandFacts: brandFactsApi.facts,
+        competitorAd,
+      });
+      if (controller.signal.aborted) return;
+      if (result) {
+        setEvaluations(prev => ({ ...prev, [idx]: result }));
+        const stable = result.ensemble?.variance.unstable_fields.length === 0;
+        toast.success(stable ? 'วิเคราะห์ลึกเสร็จ — คะแนนนิ่ง' : 'วิเคราะห์ลึกเสร็จ — คะแนนยังกระจาย');
+      } else {
+        setEnsembleErrors(prev => ({ ...prev, [idx]: 'รวมผลล้มเหลว ลองใหม่' }));
+      }
+    } catch (err) {
+      if (isAbortError(err)) return;
+      console.error('Failed to run ensemble:', err);
+      setEnsembleErrors(prev => ({ ...prev, [idx]: errorMessage(err) }));
+    } finally {
+      if (ensembleAbortsRef.current.get(idx) === controller) {
+        ensembleAbortsRef.current.delete(idx);
+        setEnsembleLoading(prev => (prev === idx ? null : prev));
+      }
+    }
   };
 
   const handleRewrite = async (ad: AdIdea, personaId: PersonaId) => {
@@ -302,6 +358,13 @@ export default function App() {
     const trendsLine = evalData && evalData.trends_used.length > 0
       ? `\n**เทรนด์ที่ใช้:** ${evalData.trends_used.join(', ')}\n`
       : '';
+    const ensembleLine = evalData?.ensemble
+      ? `\n**Ensemble:** ${evalData.ensemble.runs} รอบ · std สูงสุด ${evalData.ensemble.variance.max_std.toFixed(1)} · ฟิลด์กระจาย: ${
+          evalData.ensemble.variance.unstable_fields.length === 0
+            ? 'ไม่มี (นิ่ง)'
+            : evalData.ensemble.variance.unstable_fields.join(', ')
+        }\n`
+      : '';
 
     const structureLines = evalData
       ? `\n### 🧱 โครงสร้าง
@@ -318,6 +381,23 @@ export default function App() {
 - คะแนนทุกช่อง: ${evalData.channel_fit.ranked
           .map(r => `${r.channel.replace('_', ' ')} ${r.score}/10`)
           .join(' · ')}
+`
+      : '';
+
+    const competitorLines = evalData?.competitor
+      ? `\n### ⚔️ เทียบกับ ad คู่แข่ง
+- **ผล:** ${
+          evalData.competitor.winner === 'ours'
+            ? 'เราชนะ'
+            : evalData.competitor.winner === 'theirs'
+              ? 'คู่แข่งชนะ'
+              : 'เสมอ'
+        } (margin ${evalData.competitor.margin}/10)
+- **ของเราเด่นกว่า:**
+${evalData.competitor.ours_strengths.map(s => `  - ${s}`).join('\n')}
+- **คู่แข่งเด่นกว่า:**
+${evalData.competitor.theirs_strengths.map(s => `  - ${s}`).join('\n')}
+- **ลองปรับ:** ${evalData.competitor.recommendation}
 `
       : '';
 
@@ -339,7 +419,7 @@ ${ad.visual_idea}
 
 ## 📊 การประเมิน (The Judge)
 ${verdictLine}**คะแนนเฉลี่ย**: ${scoreText}/10
-${trendsLine}${structureLines}${channelLines}
+${ensembleLine}${trendsLine}${structureLines}${channelLines}${competitorLines}
 ${personaLines}
 `;
 
@@ -410,6 +490,7 @@ ${personaLines}
               className="w-full min-h-[80px] resize-y"
             />
           </div>
+          <CompetitorInput value={competitorAd} onChange={setCompetitorAd} />
           <button
             type="button"
             onClick={handleGenerate}
@@ -604,7 +685,12 @@ ${personaLines}
                     <div className="space-y-3">
                       <div className="bg-black/40 border border-gray-700 rounded-lg p-3">
                         <div className="flex items-center justify-between gap-3 mb-2">
-                          <p className="text-xs text-gray-500 uppercase tracking-wide">Panel Verdict</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-xs text-gray-500 uppercase tracking-wide">Panel Verdict</p>
+                            {evaluations[idx].ensemble && (
+                              <EnsembleBadge meta={evaluations[idx].ensemble!} />
+                            )}
+                          </div>
                           <span className="text-2xl font-bold text-hermes leading-none">
                             {evaluations[idx].average_score.toFixed(1)}<span className="text-xs text-gray-500 font-normal">/10</span>
                           </span>
@@ -627,11 +713,37 @@ ${personaLines}
                             <span>เพิ่งมาแรง (30 นาที): <span className="text-orange-300">{trendsRef.current.new_in_window.slice(0, 5).join(' · ')}</span></span>
                           </p>
                         )}
+                        {!evaluations[idx].ensemble && (
+                          <div className="mt-2.5 pt-2.5 border-t border-gray-800">
+                            {ensembleErrors[idx] && (
+                              <p className="text-[11px] text-red-300 mb-1.5">{ensembleErrors[idx]}</p>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleRunEnsemble(idx, ad)}
+                              disabled={ensembleLoading === idx}
+                              aria-busy={ensembleLoading === idx}
+                              className="text-[11px] text-gray-400 hover:text-hermes inline-flex items-center gap-1.5 min-h-[36px] px-2 -mx-2 disabled:opacity-50 transition-colors"
+                            >
+                              {ensembleLoading === idx ? (
+                                <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+                              ) : (
+                                <Microscope className="w-3 h-3" aria-hidden="true" />
+                              )}
+                              {ensembleLoading === idx
+                                ? 'กำลังประเมินเพิ่ม 2 รอบ...'
+                                : 'วิเคราะห์ลึก (3-run ensemble)'}
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         <StructureBreakdown structure={evaluations[idx].structure} />
                         <ChannelFitPanel channelFit={evaluations[idx].channel_fit} />
                       </div>
+                      {evaluations[idx].competitor && (
+                        <CompetitorPanel comparison={evaluations[idx].competitor!} />
+                      )}
                       <PersonaPanelGroup
                         personas={evaluations[idx].personas}
                         rewriteStateOf={(pid) => rewrites[`${ad.clientId}::${pid}`]}

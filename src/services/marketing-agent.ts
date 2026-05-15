@@ -212,13 +212,38 @@ ${current}${previousBlock}${newBlock}${related}
 `;
 };
 
+const buildCompetitorBlock = (competitor: string | null): string => {
+  if (!competitor || competitor.trim().length === 0) return '';
+  return `
+═══════════════════════════════════════════════════════════════
+COMPETITOR REFERENCE — โฆษณาของคู่แข่งในตลาดเดียวกัน:
+
+"""
+${competitor.trim()}
+"""
+
+เปรียบเทียบ ad ของเรากับคู่แข่งนี้แบบ panel-level (ไม่ใช่ per-persona):
+  winner          : 'ours' / 'theirs' / 'tie' (ฝ่ายที่ panel ส่วนใหญ่จะ engage มากกว่า)
+  margin          : 0-10 (ห่างกันแค่ไหน — 0 = เกือบเสมอ, 10 = ขาดลอย)
+  ours_strengths  : 2-3 ข้อสั้นๆ ที่ ad เราเหนือกว่าคู่แข่ง
+  theirs_strengths: 2-3 ข้อสั้นๆ ที่ ad คู่แข่งเหนือกว่าเรา
+  recommendation  : 1 ประโยคที่ควรปรับ ad ของเราเพื่อปิดช่องว่าง (ไม่เกิน 200 ตัวอักษร)
+
+ใส่เพิ่มใน field "competitor" ของ JSON output.`;
+};
+
 const buildJudgePrompt = (
   trends: TrendsSnapshot | null,
   brandFacts: readonly BrandFact[],
+  competitor: string | null = null,
 ): string => {
   const trendsBlock = buildTrendsBlock(trends);
   const factsBlock = formatBrandFactsForPrompt(brandFacts);
   const timeBlock = buildTimeContextBlock();
+  const competitorBlock = buildCompetitorBlock(competitor);
+  const competitorJsonField = competitor
+    ? `,\n  "competitor": {"winner": "ours|theirs|tie", "margin": 0, "ours_strengths": ["..."], "theirs_strengths": ["..."], "recommendation": "..."}`
+    : '';
   return `คุณคือ Consumer Panel Simulator สำหรับ "ม่านธารา" (ท่าศาลา, ลพบุรี)
 จงสวมบทบาทผู้บริโภค 4 คนนี้พร้อมกัน แต่ละคนเห็นโฆษณานี้ใน feed Facebook/IG/TikTok ขณะอยู่ในบริบทเฉพาะของตัวเอง
 ห้ามให้คะแนน "เฉลี่ยๆ" — ถ้าโฆษณาไม่ตรงกลุ่ม ให้คะแนนต่ำตรงไปตรงมา
@@ -316,14 +341,27 @@ reasoning = สั้น ๆ ว่าทำไมเลือก best (~80 ต�
     {"id": "businessman", "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."},
     {"id": "genz",        "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."}
   ],
-  "average_score": 0.0
-}${timeBlock}${factsBlock}`;
+  "average_score": 0.0${competitorJsonField}
+}${timeBlock}${factsBlock}${competitorBlock}`;
 };
 
 export interface EvaluateAdOptions {
   readonly trends?: TrendsSnapshot | null;
   readonly brandFacts?: readonly BrandFact[];
+  /**
+   * Stable salt to differentiate cache entries between ensemble runs.
+   * Use 'r2', 'r3' etc. for repeated evaluations; omit for the baseline.
+   */
+  readonly cacheSalt?: string;
+  /** Optional competitor ad text — adds comparison block to the output. */
+  readonly competitorAd?: string;
 }
+
+const hashString = (s: string): string => {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return h.toString(36);
+};
 
 export const evaluateAd = async (
   ad: AdIdea,
@@ -332,7 +370,8 @@ export const evaluateAd = async (
 ): Promise<AdEvaluation | null> => {
   const trends = options.trends ?? null;
   const brandFacts = options.brandFacts ?? [];
-  const systemPrompt = buildJudgePrompt(trends, brandFacts);
+  const competitor = options.competitorAd?.trim() ? options.competitorAd.trim() : null;
+  const systemPrompt = buildJudgePrompt(trends, brandFacts, competitor);
 
   const userPrompt = `ประเมินโฆษณาต่อไปนี้:
 ข้อความ: ${ad.copy}
@@ -340,7 +379,9 @@ export const evaluateAd = async (
 
   const trendsDate = trends?.cached_at.slice(0, 10) ?? 'no-trends';
   const factsHash = hashBrandFacts(brandFacts);
-  const cacheKeyData = `${ad.copy}\n${ad.visual_idea}\n${trendsDate}\n${factsHash}`;
+  const salt = options.cacheSalt ?? '';
+  const compHash = competitor ? hashString(competitor) : '';
+  const cacheKeyData = `${ad.copy}\n${ad.visual_idea}\n${trendsDate}\n${factsHash}\n${salt}\n${compHash}`;
 
   try {
     return await generateAndExtract({
@@ -356,6 +397,182 @@ export const evaluateAd = async (
     logExtractionFailure('evaluateAd', e);
     return null;
   }
+};
+
+// ════════════════════════════════════════════════════════════════════
+// runEnsembleEval — call evaluateAd N-1 more times in parallel, then
+// aggregate (mean per numeric field, mode per discrete field) and return
+// a single AdEvaluation augmented with ensemble metadata (variance, runs).
+// ════════════════════════════════════════════════════════════════════
+
+const STD_THRESHOLD = 1.0;
+
+const std = (values: readonly number[]): number => {
+  if (values.length === 0) return 0;
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  return Math.sqrt(
+    values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length,
+  );
+};
+
+const mean = (values: readonly number[]): number => {
+  if (values.length === 0) return 0;
+  return values.reduce((a, b) => a + b, 0) / values.length;
+};
+
+const round1 = (v: number): number => Math.round(v * 10) / 10;
+
+const mode = <T extends string>(values: readonly T[]): T => {
+  const counts = new Map<T, number>();
+  for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
+  let best = values[0];
+  let bestN = 0;
+  for (const [k, n] of counts) {
+    if (n > bestN) {
+      best = k;
+      bestN = n;
+    }
+  }
+  return best;
+};
+
+function aggregateEvaluations(runs: readonly AdEvaluation[]): AdEvaluation {
+  if (runs.length === 0) throw new Error('aggregateEvaluations: empty input');
+  const baseline = runs[0];
+  const unstable: string[] = [];
+  const stds: number[] = [];
+
+  const trackField = (label: string, vals: readonly number[]): number => {
+    const s = std(vals);
+    stds.push(s);
+    if (s > STD_THRESHOLD) unstable.push(label);
+    return round1(mean(vals));
+  };
+
+  // structure
+  const structure = {
+    hook_score: trackField('structure.hook', runs.map(r => r.structure.hook_score)),
+    body_score: trackField('structure.body', runs.map(r => r.structure.body_score)),
+    cta_score: trackField('structure.cta', runs.map(r => r.structure.cta_score)),
+    hook_critique: baseline.structure.hook_critique,
+    body_critique: baseline.structure.body_critique,
+    cta_critique: baseline.structure.cta_critique,
+  };
+
+  // channel_fit — aggregate per channel score, pick best by aggregated mean
+  const channelIds = baseline.channel_fit.ranked.map(r => r.channel);
+  const aggregatedChannels = channelIds.map(ch => {
+    const scores = runs
+      .map(r => r.channel_fit.ranked.find(rr => rr.channel === ch)?.score)
+      .filter((s): s is number => typeof s === 'number');
+    return {
+      channel: ch,
+      score: trackField(`channel_fit.${ch}`, scores),
+    };
+  });
+  aggregatedChannels.sort((a, b) => b.score - a.score);
+  const channel_fit = {
+    ranked: aggregatedChannels,
+    best: aggregatedChannels[0].channel,
+    reasoning: baseline.channel_fit.reasoning,
+  };
+
+  // personas
+  const personaIds = baseline.personas.map(p => p.id);
+  const personas = personaIds.map(pid => {
+    const samples = runs
+      .map(r => r.personas.find(p => p.id === pid))
+      .filter((p): p is NonNullable<typeof p> => Boolean(p));
+    return {
+      id: pid,
+      scroll_stop_score: trackField(
+        `${pid}.scroll_stop`,
+        samples.map(s => s.scroll_stop_score),
+      ),
+      focused_score: trackField(
+        `${pid}.focused`,
+        samples.map(s => s.focused_score),
+      ),
+      memory_score: trackField(
+        `${pid}.memory`,
+        samples.map(s => s.memory_score),
+      ),
+      confidence: mode(samples.map(s => s.confidence)),
+      verdict: samples[0].verdict,
+      suggestion: samples[0].suggestion,
+    };
+  });
+
+  const average_score = round1(mean(runs.map(r => r.average_score)));
+  const max_std = stds.length === 0 ? 0 : Math.max(...stds);
+
+  // competitor — only present if all runs supplied one (defensive)
+  let competitor: AdEvaluation['competitor'] = undefined;
+  const compRuns = runs
+    .map(r => r.competitor)
+    .filter((c): c is NonNullable<typeof c> => Boolean(c));
+  if (compRuns.length > 0) {
+    competitor = {
+      winner: mode(compRuns.map(c => c.winner)),
+      margin: trackField('competitor.margin', compRuns.map(c => c.margin)),
+      ours_strengths: compRuns[0].ours_strengths,
+      theirs_strengths: compRuns[0].theirs_strengths,
+      recommendation: compRuns[0].recommendation,
+    };
+  }
+
+  return {
+    panel_verdict: baseline.panel_verdict,
+    trends_used: baseline.trends_used,
+    structure,
+    channel_fit,
+    personas,
+    average_score,
+    ensemble: {
+      runs: runs.length,
+      variance: {
+        max_std: round1(max_std),
+        unstable_fields: unstable,
+      },
+    },
+    ...(competitor ? { competitor } : {}),
+  };
+}
+
+export interface EnsembleOptions {
+  readonly trends?: TrendsSnapshot | null;
+  readonly brandFacts?: readonly BrandFact[];
+  readonly competitorAd?: string;
+  /** Extra runs to perform on top of the baseline (default 2 → 3 total). */
+  readonly additionalRuns?: number;
+}
+
+export const runEnsembleEval = async (
+  ad: AdIdea,
+  baseline: AdEvaluation,
+  signal?: AbortSignal,
+  options: EnsembleOptions = {},
+): Promise<AdEvaluation | null> => {
+  const extras = Math.max(1, options.additionalRuns ?? 2);
+  const salts = Array.from({ length: extras }, (_, i) => `r${i + 2}`);
+
+  const additional = await Promise.all(
+    salts.map(salt =>
+      evaluateAd(ad, signal, {
+        trends: options.trends,
+        brandFacts: options.brandFacts,
+        competitorAd: options.competitorAd,
+        cacheSalt: salt,
+      }),
+    ),
+  );
+
+  if (signal?.aborted) return null;
+
+  const all: AdEvaluation[] = [baseline, ...additional.filter((r): r is AdEvaluation => r !== null)];
+  if (all.length < 2) return null; // need at least 2 to compute variance
+
+  return aggregateEvaluations(all);
 };
 
 // ════════════════════════════════════════════════════════════════════
