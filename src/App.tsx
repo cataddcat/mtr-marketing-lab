@@ -4,7 +4,7 @@ import type { AdIdea, AdEvaluation, VisualPrompt } from './services/marketing-ag
 import type { RewriteState } from './components/PersonaScoreCard';
 import type { PersonaId, ParsedAdIdea } from './lib/schemas';
 import { fetchTrends, type TrendsSnapshot } from './services/trends';
-import { Loader2, Target, Image as ImageIcon, BarChart, CheckCircle, Copy, Check, Bookmark, Trash2, Download, Palette, TrendingUp, Settings, ThumbsUp, ThumbsDown, Microscope, MessageSquareQuote, LineChart, Languages } from 'lucide-react';
+import { Loader2, Target, Image as ImageIcon, BarChart, CheckCircle, Copy, Check, Bookmark, Trash2, Download, Palette, TrendingUp, Settings, ThumbsUp, ThumbsDown, Microscope, MessageSquareQuote, LineChart, Languages, ChevronDown } from 'lucide-react';
 import { InlineError } from './components/InlineError';
 import { useToast } from './components/toast-context';
 import { PersonaPanelGroup } from './components/PersonaPanelGroup';
@@ -21,6 +21,7 @@ import { BrandFactsPanel } from './components/BrandFactsPanel';
 import { BrandFactsBanner } from './components/BrandFactsBanner';
 import { CustomerQuotesPanel } from './components/CustomerQuotesPanel';
 import { ExamplePicker } from './components/ExamplePicker';
+import { ThemeToggle } from './components/ThemeToggle';
 import { useBrandFacts } from './hooks/useBrandFacts';
 import { useCustomerQuotes } from './hooks/useCustomerQuotes';
 import { PERSONA_LABELS } from './lib/schemas';
@@ -483,119 +484,187 @@ ${personaLines}
     toast.success('Export เรียบร้อย');
   };
 
+  const activeBrandFacts = brandFactsApi.facts.filter(f => f.enabled).length;
+  const activeQuotes = customerQuotesApi.quotes.filter(q => q.enabled && q.quote.trim().length > 0).length;
+
   return (
-    <div className="min-h-screen p-6 md:p-12 max-w-5xl mx-auto">
-      <header className="mb-8 border-b border-gray-800 pb-4">
-        <h1 className="text-3xl font-bold [letter-spacing:-0.02em]">
-          <span className="text-hermes">MTR</span> Marketing Lab
-        </h1>
-        <p className="text-gray-400 mt-2">AI-Driven Ad Copy &amp; Evaluation System</p>
+    <div className="min-h-screen">
+      {/* App header — NOT sticky */}
+      <header className="border-b border-border bg-bg-elevated">
+        <div className="max-w-[1440px] mx-auto px-6 h-[52px] flex items-center gap-6">
+          <div className="flex items-center gap-3 shrink-0">
+            <img src="/wordmark.svg" alt="Marnthara" className="brand-asset h-5 w-auto" />
+            <span className="font-mono text-[10px] tracking-[0.16em] uppercase text-fg-3 px-2 py-0.5 border border-border-faint rounded">
+              Marketing Lab
+            </span>
+          </div>
+          <nav className="hidden md:flex items-center gap-1 ml-2 flex-1" aria-label="Primary">
+            <a href="#" className="px-3 py-1.5 text-sm rounded-md text-fg-1 bg-bg-hover font-medium">Generator</a>
+            <a href="#" className="px-3 py-1.5 text-sm rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors">Library</a>
+            <a href="#" className="px-3 py-1.5 text-sm rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors">Trends</a>
+            <a href="#" className="px-3 py-1.5 text-sm rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors">Brand facts</a>
+            <a href="#" className="px-3 py-1.5 text-sm rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors">Settings</a>
+          </nav>
+          <div className="ml-auto flex items-center gap-3 shrink-0">
+            <ThemeToggle />
+            <span className="font-mono text-[10.5px] tracking-[0.12em] uppercase text-fg-4">v2 · internal</span>
+          </div>
+        </div>
       </header>
 
-      <main className="grid md:grid-cols-3 gap-8">
-        <aside
-          aria-label="ตัวควบคุมการสร้างโฆษณา"
-          className="md:col-span-1 space-y-6 bg-panel p-6 rounded-xl border border-gray-800 h-fit sticky top-6"
-        >
+      {/* Page title row — NOT sticky */}
+      <section className="border-b border-border-faint">
+        <div className="max-w-[1440px] mx-auto px-6 py-7 flex items-end justify-between gap-6 flex-wrap">
           <div>
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <label htmlFor={productId} className="block text-sm font-medium text-gray-400">
-                สินค้า / บริการเป้าหมาย
-              </label>
-              <ExamplePicker
-                examples={PRODUCT_EXAMPLES}
-                onPick={setProduct}
-                label="สินค้า"
+            <div className="font-mono text-[10.5px] tracking-[0.16em] uppercase text-fg-3 mb-2">
+              Marketing Lab · Generator
+            </div>
+            <h1 className="font-display text-3xl md:text-4xl text-fg-1 leading-tight tracking-tight">
+              Brainstorm &amp; analyze ad variations
+            </h1>
+          </div>
+          <div className="flex items-center gap-4 text-[11px] text-fg-3 font-mono uppercase tracking-[0.12em]">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--color-success)', boxShadow: '0 0 6px var(--color-success)' }} aria-hidden="true" />
+              Judge online
+            </span>
+            <span>Trends · refreshed</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Horizontal generator bar — NOT sticky */}
+      <section
+        aria-label="ตัวควบคุมการสร้างโฆษณา"
+        className="border-b border-border bg-bg-elevated"
+      >
+        <div className="max-w-[1440px] mx-auto px-6 py-5">
+          <div className="grid gap-4 md:grid-cols-[1fr_1fr_220px]">
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <label htmlFor={productId} className="block font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3">
+                  Product · สินค้า/บริการเป้าหมาย
+                </label>
+                <ExamplePicker
+                  examples={PRODUCT_EXAMPLES}
+                  onPick={setProduct}
+                  label="สินค้า"
+                />
+              </div>
+              <textarea
+                id={productId}
+                required
+                value={product}
+                onChange={(e) => setProduct(e.target.value)}
+                rows={2}
+                placeholder="เช่น ม่านลอนเทปผ้า Blackout"
+                lang="th"
+                className="w-full min-h-[64px] resize-none"
               />
             </div>
-            <input
-              id={productId}
-              type="text"
-              required
-              value={product}
-              onChange={(e) => setProduct(e.target.value)}
-              placeholder="เช่น ม่านลอนเทปผ้า Blackout"
-              className="min-h-[44px] w-full"
-            />
-          </div>
-          <div>
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <label htmlFor={promoId} className="block text-sm font-medium text-gray-400">
-                โปรโมชัน / จุดขาย
-              </label>
-              <ExamplePicker
-                examples={PROMO_EXAMPLES}
-                onPick={setPromo}
-                label="โปรโมชัน"
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <label htmlFor={promoId} className="block font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3">
+                  Promo · จุดขาย/โปรโมชัน
+                </label>
+                <ExamplePicker
+                  examples={PROMO_EXAMPLES}
+                  onPick={setPromo}
+                  label="โปรโมชัน"
+                />
+              </div>
+              <textarea
+                id={promoId}
+                value={promo}
+                onChange={(e) => setPromo(e.target.value)}
+                rows={2}
+                placeholder="เช่น ประเมินหน้างานฟรี ท่าศาลา-ลพบุรี"
+                lang="th"
+                className="w-full min-h-[64px] resize-none"
               />
             </div>
-            <textarea
-              id={promoId}
-              value={promo}
-              onChange={(e) => setPromo(e.target.value)}
-              rows={3}
-              placeholder="เช่น ประเมินหน้างานฟรี ท่าศาลา-ลพบุรี"
-              className="w-full min-h-[80px] resize-y"
-            />
+            <div className="flex flex-col">
+              <span className="block mb-2 h-[15px]" aria-hidden="true">&nbsp;</span>
+              <button
+                type="button"
+                onClick={handleGenerate}
+                disabled={loading || !product}
+                aria-busy={loading}
+                className="flex-1 min-h-[64px] rounded-md flex items-center justify-center gap-2 font-medium transition-colors disabled:opacity-50"
+                style={{
+                  background: 'var(--color-accent)',
+                  color: 'var(--color-accent-fg)',
+                }}
+              >
+                {loading ? (
+                  <Loader2 className="animate-spin w-5 h-5" aria-hidden="true" />
+                ) : (
+                  <Target className="w-5 h-5" aria-hidden="true" />
+                )}
+                {loading ? 'Processing...' : 'Generate Ads'}
+              </button>
+            </div>
           </div>
-          <CompetitorInput value={competitorAd} onChange={setCompetitorAd} />
-          <button
-            type="button"
-            onClick={handleGenerate}
-            disabled={loading || !product}
-            aria-busy={loading}
-            className="w-full bg-hermes hover:bg-orange-600 text-white font-medium py-3 min-h-[44px] rounded-md flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            {loading ? (
-              <Loader2 className="animate-spin w-5 h-5" aria-hidden="true" />
-            ) : (
-              <Target className="w-5 h-5" aria-hidden="true" />
-            )}
-            {loading ? 'Processing...' : 'Generate Ads'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setFactsPanelOpen(true)}
-            className="w-full text-sm text-gray-400 hover:text-gray-100 hover:bg-black/30 py-2 min-h-[44px] rounded-md inline-flex items-center justify-center gap-2 transition-colors border border-gray-800"
-          >
-            <Settings className="w-4 h-4" aria-hidden="true" />
-            ข้อมูลร้าน ({brandFactsApi.facts.filter(f => f.enabled).length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setQuotesPanelOpen(true)}
-            className="w-full text-sm text-gray-400 hover:text-gray-100 hover:bg-black/30 py-2 min-h-[44px] rounded-md inline-flex items-center justify-center gap-2 transition-colors border border-gray-800"
-          >
-            <MessageSquareQuote className="w-4 h-4" aria-hidden="true" />
-            เสียงลูกค้าจริง ({customerQuotesApi.quotes.filter(q => q.enabled && q.quote.trim().length > 0).length})
-          </button>
-          <BrandFactsBanner
-            facts={brandFactsApi.facts}
-            onOpenPanel={() => setFactsPanelOpen(true)}
-          />
-        </aside>
 
-        <section
-          aria-labelledby={resultsHeadingId}
-          className="md:col-span-2 space-y-6"
-        >
-          <h2 id={resultsHeadingId} className="sr-only">ผลลัพธ์โฆษณา</h2>
-          {generateError && (
-            <InlineError
-              message={generateError}
-              onRetry={handleGenerate}
-              onDismiss={() => setGenerateError(null)}
-            />
-          )}
+          {/* Advanced disclosure — CompetitorInput renders its own collapse */}
+          <div className="mt-4">
+            <CompetitorInput value={competitorAd} onChange={setCompetitorAd} />
+          </div>
 
-          {ads.length === 0 && !loading && !generateError && savedAds.length === 0 && (
-            <div
-              role="status"
-              className="h-full flex items-center justify-center border-2 border-dashed border-gray-800 rounded-xl p-12 text-gray-500"
+          {/* Chip row — context counts */}
+          <div className="mt-4 flex items-center gap-3 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setFactsPanelOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-pill border border-border-faint text-fg-2 hover:text-fg-1 hover:bg-bg-hover transition-colors"
             >
-              กรอกข้อมูลด้านซ้ายเพื่อเริ่มสร้างโฆษณา
-            </div>
-          )}
+              <Settings className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+              Brand facts · <b className="text-fg-1 font-medium">{activeBrandFacts}</b>
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuotesPanelOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-pill border border-border-faint text-fg-2 hover:text-fg-1 hover:bg-bg-hover transition-colors"
+            >
+              <MessageSquareQuote className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+              Customer quotes · <b className="text-fg-1 font-medium">{activeQuotes}</b>
+            </button>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-fg-4 font-mono tracking-[0.08em] uppercase">
+              <ChevronDown className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+              Style mix · Direct response · Brand story · Pain-led
+            </span>
+          </div>
+
+          <div className="mt-4">
+            <BrandFactsBanner
+              facts={brandFactsApi.facts}
+              onOpenPanel={() => setFactsPanelOpen(true)}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Work area */}
+      <main>
+        <div className="max-w-[1440px] mx-auto px-6 py-8">
+          <section aria-labelledby={resultsHeadingId} className="space-y-6">
+            <h2 id={resultsHeadingId} className="sr-only">ผลลัพธ์โฆษณา</h2>
+            {generateError && (
+              <InlineError
+                message={generateError}
+                onRetry={handleGenerate}
+                onDismiss={() => setGenerateError(null)}
+              />
+            )}
+
+            {ads.length === 0 && !loading && !generateError && savedAds.length === 0 && (
+              <div
+                role="status"
+                className="flex items-center justify-center border border-dashed border-border rounded-lg p-12 text-fg-3 text-sm"
+              >
+                กรอกข้อมูลด้านบนแล้วกด <b className="text-fg-1 mx-1 font-medium">Generate Ads</b> เพื่อเริ่มสร้างโฆษณา
+              </div>
+            )}
 
           {ads.map((ad, idx) => {
             const headingId = `ad-${ad.clientId}-heading`;
@@ -937,7 +1006,8 @@ ${personaLines}
               </ul>
             </section>
           )}
-        </section>
+          </section>
+        </div>
       </main>
 
       <BrandFactsPanel
