@@ -4,7 +4,7 @@ import type { AdIdea, AdEvaluation, VisualPrompt } from './services/marketing-ag
 import type { RewriteState } from './components/PersonaScoreCard';
 import type { PersonaId, ParsedAdIdea } from './lib/schemas';
 import { fetchTrends, type TrendsSnapshot } from './services/trends';
-import { Loader2, Target, ChevronDown, Bookmark, MessageSquareQuote } from 'lucide-react';
+import { Loader2, Target, Bookmark, MessageSquareQuote } from 'lucide-react';
 import { InlineError } from './components/InlineError';
 import { useToast } from './components/toast-context';
 import { CompetitorInput } from './components/CompetitorInput';
@@ -14,6 +14,7 @@ import { isPerformanceEmpty, type PerformanceMetrics } from './lib/performance';
 import { BrandFactsView } from './components/BrandFactsView';
 import { BrandFactsBanner } from './components/BrandFactsBanner';
 import { CustomerQuotesView } from './components/CustomerQuotesView';
+import { SectionTag } from './components/SectionTag';
 import { ExamplePicker } from './components/ExamplePicker';
 import { ThemeToggle } from './components/ThemeToggle';
 import { AdCard } from './components/AdCard';
@@ -494,7 +495,8 @@ ${personaLines}
   return (
     <div className="min-h-screen">
       {/* App header — NOT sticky */}
-      <header className="border-b border-border bg-bg-elevated">
+      <header className="relative border-b border-border bg-bg-elevated" data-dev-code="HDR">
+        <SectionTag code="HDR" floating />
         <div className="max-w-[1440px] mx-auto px-6 h-[52px] flex items-center gap-6">
           <div className="flex items-center gap-3 shrink-0">
             <img src="/wordmark.svg" alt="Marnthara" className="brand-asset h-5 w-auto" />
@@ -574,7 +576,8 @@ ${personaLines}
       </header>
 
       {/* Page title row — NOT sticky */}
-      <section className="border-b border-border-faint">
+      <section className="relative border-b border-border-faint" data-dev-code="TITLE">
+        <SectionTag code="TITLE" floating />
         <div className="max-w-[1440px] mx-auto px-6 py-7 flex items-end justify-between gap-6 flex-wrap">
           <div>
             <div className="font-mono text-[10.5px] tracking-[0.16em] uppercase text-fg-3 mb-2">
@@ -602,14 +605,17 @@ ${personaLines}
       {activeTab === 'generator' && (
       <section
         aria-label="ตัวควบคุมการสร้างโฆษณา"
-        className="border-b border-border bg-bg-elevated"
+        className="relative border-b border-border bg-bg-elevated"
+        data-dev-code="GEN"
       >
+        <SectionTag code="GEN" floating />
         <div className="max-w-[1440px] mx-auto px-6 py-5">
           <div className="grid gap-4 md:grid-cols-[1fr_1fr_1fr_220px] items-stretch">
-            <div>
+            <div className="relative" data-dev-code="GEN.PRODUCT">
               <div className="flex items-center justify-between gap-2 mb-2">
-                <label htmlFor={productId} className="block font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3">
+                <label htmlFor={productId} className="block font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3 inline-flex items-center gap-2">
                   Product · สินค้า/บริการ
+                  <SectionTag code="GEN.PRODUCT" />
                 </label>
                 <ExamplePicker
                   examples={PRODUCT_EXAMPLES}
@@ -622,16 +628,17 @@ ${personaLines}
                 required
                 value={product}
                 onChange={(e) => setProduct(e.target.value)}
-                rows={2}
+                rows={5}
                 placeholder="เช่น ม่านลอนเทปผ้า Blackout"
                 lang="th"
-                className="w-full min-h-[64px] resize-none rounded-md border border-border bg-bg px-3 py-2 text-sm leading-relaxed text-fg-1 placeholder:text-fg-4 transition-colors hover:border-border-strong focus:border-accent"
+                className="w-full min-h-[140px] resize-none rounded-md border border-border bg-bg px-3 py-2 text-sm leading-relaxed text-fg-1 placeholder:text-fg-4 transition-colors hover:border-border-strong focus:border-accent"
               />
             </div>
-            <div>
+            <div className="relative" data-dev-code="GEN.PROMO">
               <div className="flex items-center justify-between gap-2 mb-2">
-                <label htmlFor={promoId} className="block font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3">
+                <label htmlFor={promoId} className="block font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3 inline-flex items-center gap-2">
                   Promo · จุดขาย/โปรโมชัน
+                  <SectionTag code="GEN.PROMO" />
                 </label>
                 <ExamplePicker
                   examples={PROMO_EXAMPLES}
@@ -643,21 +650,25 @@ ${personaLines}
                 id={promoId}
                 value={promo}
                 onChange={(e) => setPromo(e.target.value)}
-                rows={2}
+                rows={5}
                 placeholder="เช่น ประเมินหน้างานฟรี ท่าศาลา-ลพบุรี"
                 lang="th"
-                className="w-full min-h-[64px] resize-none rounded-md border border-border bg-bg px-3 py-2 text-sm leading-relaxed text-fg-1 placeholder:text-fg-4 transition-colors hover:border-border-strong focus:border-accent"
+                className="w-full min-h-[140px] resize-none rounded-md border border-border bg-bg px-3 py-2 text-sm leading-relaxed text-fg-1 placeholder:text-fg-4 transition-colors hover:border-border-strong focus:border-accent"
               />
             </div>
-            <CompetitorInput value={competitorAd} onChange={setCompetitorAd} />
-            <div className="flex flex-col">
+            <div className="relative" data-dev-code="GEN.ADV">
+              <SectionTag code="GEN.ADV" floating />
+              <CompetitorInput value={competitorAd} onChange={setCompetitorAd} />
+            </div>
+            <div className="flex flex-col relative" data-dev-code="GEN.RUN">
+              <SectionTag code="GEN.RUN" />
               <span className="block mb-2 h-[15px]" aria-hidden="true">&nbsp;</span>
               <button
                 type="button"
                 onClick={handleGenerate}
                 disabled={loading || !product}
                 aria-busy={loading}
-                className="flex-1 min-h-[64px] rounded-md flex items-center justify-center gap-2 font-medium transition-colors disabled:opacity-50"
+                className="flex-1 min-h-[140px] rounded-md flex items-center justify-center gap-2 font-medium transition-colors disabled:opacity-50"
                 style={{
                   background: 'var(--color-accent)',
                   color: 'var(--color-accent-fg)',
@@ -673,14 +684,8 @@ ${personaLines}
             </div>
           </div>
 
-          <div className="mt-4 flex items-center gap-3 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-fg-4 font-mono tracking-[0.08em] uppercase">
-              <ChevronDown className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
-              Style mix · Direct response · Brand story · Pain-led
-            </span>
-          </div>
-
-          <div className="mt-4">
+          <div className="mt-3 relative" data-dev-code="GEN.BANNER">
+            <SectionTag code="GEN.BANNER" floating />
             <BrandFactsBanner
               facts={brandFactsApi.facts}
               onOpenPanel={() => setActiveTab('brand-facts')}
@@ -694,7 +699,8 @@ ${personaLines}
       <main>
         <div className="max-w-[1440px] mx-auto px-6 py-8">
           {activeTab === 'generator' && (
-            <section aria-labelledby={resultsHeadingId} className="space-y-4">
+            <section aria-labelledby={resultsHeadingId} className="relative space-y-4" data-dev-code="OUT">
+              <SectionTag code="OUT" floating />
               <h2 id={resultsHeadingId} className="sr-only">ผลลัพธ์โฆษณา</h2>
 
               {generateError && (
@@ -708,9 +714,11 @@ ${personaLines}
               {ads.length === 0 && !loading && !generateError && (
                 <div
                   role="status"
-                  className="flex items-center justify-center border border-dashed border-border rounded-md p-12 text-fg-3 text-sm"
+                  className="relative flex items-center justify-center border border-dashed border-border rounded-md p-12 text-fg-3 text-sm"
                   lang="th"
+                  data-dev-code="OUT.EMPTY"
                 >
+                  <SectionTag code="OUT.EMPTY" floating />
                   กรอกข้อมูลด้านบนแล้วกด <b className="text-fg-1 mx-1 font-medium">Generate Ads</b> เพื่อเริ่มสร้างโฆษณา
                 </div>
               )}
@@ -718,18 +726,22 @@ ${personaLines}
               {ads.length > 0 && (
                 <>
                   {/* Summary strip — 3 mini-gauges */}
-                  <SummaryStrip ads={ads} evaluations={evaluations} />
+                  <div className="relative" data-dev-code="OUT.SUM">
+                    <SectionTag code="OUT.SUM" floating />
+                    <SummaryStrip ads={ads} evaluations={evaluations} />
+                  </div>
 
                   <div className="flex items-end justify-between gap-4 pt-2">
-                    <h3 className="text-base font-semibold text-fg-1">
+                    <h3 className="text-base font-semibold text-fg-1 inline-flex items-center gap-2">
                       Drafts <span className="text-fg-4 font-normal text-sm">· click a row to expand</span>
+                      <SectionTag code="OUT.LIST" />
                     </h3>
                     <span className="font-mono text-[10.5px] tracking-[0.12em] uppercase text-fg-3">
                       {Object.keys(evaluations).length} of {ads.length} scored
                     </span>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-3" data-dev-code="OUT.LIST">
                     {ads.map((ad, idx) => (
                       <AdCard
                         key={ad.clientId}
@@ -765,12 +777,14 @@ ${personaLines}
           )}
 
           {activeTab === 'library' && (
-            <div className="space-y-5">
+            <div className="relative space-y-5" data-dev-code="LIB">
+              <SectionTag code="LIB" floating />
               <nav
                 role="tablist"
                 aria-label="คลังข้อมูล"
-                className="flex gap-1 border-b"
+                className="relative flex gap-1 border-b"
                 style={{ borderColor: 'var(--color-border)' }}
+                data-dev-code="LIB.TABS"
               >
                 <SubTabButton
                   active={librarySubTab === 'saved'}
@@ -778,6 +792,7 @@ ${personaLines}
                   icon={<Bookmark className="w-3.5 h-3.5" strokeWidth={1.5} aria-hidden="true" />}
                   label="Saved ads"
                   count={savedAds.length}
+                  devCode="LIB.SAVED"
                 />
                 <SubTabButton
                   active={librarySubTab === 'quotes'}
@@ -785,27 +800,34 @@ ${personaLines}
                   icon={<MessageSquareQuote className="w-3.5 h-3.5" strokeWidth={1.5} aria-hidden="true" />}
                   label="Customer quotes"
                   count={activeQuotes}
+                  devCode="LIB.QUOTES"
                 />
+                <SectionTag code="LIB.TABS" className="ml-auto self-center mb-1.5" />
               </nav>
 
               {librarySubTab === 'saved' && (
                 savedAds.length > 0 ? (
-                  <SavedLibrary
-                    items={savedAds}
-                    headingId={savedHeadingId}
-                    onRemove={handleRemoveSaved}
-                    onToggleOutcome={handleToggleOutcome}
-                    onOpenPerformance={setPerformanceTarget}
-                    onOpenTranslate={setTranslateTarget}
-                    onExport={handleExportObsidian}
-                    onCopy={handleCopyRewrite}
-                  />
+                  <div className="relative" data-dev-code="LIB.SAVED">
+                    <SectionTag code="LIB.SAVED" floating />
+                    <SavedLibrary
+                      items={savedAds}
+                      headingId={savedHeadingId}
+                      onRemove={handleRemoveSaved}
+                      onToggleOutcome={handleToggleOutcome}
+                      onOpenPerformance={setPerformanceTarget}
+                      onOpenTranslate={setTranslateTarget}
+                      onExport={handleExportObsidian}
+                      onCopy={handleCopyRewrite}
+                    />
+                  </div>
                 ) : (
                   <div
                     role="status"
-                    className="flex flex-col items-center justify-center border border-dashed border-border rounded-md p-12 text-fg-3 text-sm gap-3"
+                    className="relative flex flex-col items-center justify-center border border-dashed border-border rounded-md p-12 text-fg-3 text-sm gap-3"
                     lang="th"
+                    data-dev-code="LIB.SAVED.EMPTY"
                   >
+                    <SectionTag code="LIB.SAVED.EMPTY" floating />
                     <Bookmark className="w-8 h-8 text-fg-4" strokeWidth={1.5} aria-hidden="true" />
                     <div className="text-center space-y-1.5">
                       <p className="text-fg-2">ยังไม่มีโฆษณาที่บันทึก</p>
@@ -826,27 +848,33 @@ ${personaLines}
               )}
 
               {librarySubTab === 'quotes' && (
-                <CustomerQuotesView
-                  quotes={customerQuotesApi.quotes}
-                  onUpdate={customerQuotesApi.update}
-                  onAdd={customerQuotesApi.add}
-                  onRemove={customerQuotesApi.remove}
-                  onResetAll={customerQuotesApi.resetAll}
-                  onResetField={customerQuotesApi.resetField}
-                />
+                <div className="relative" data-dev-code="LIB.QUOTES">
+                  <SectionTag code="LIB.QUOTES" floating />
+                  <CustomerQuotesView
+                    quotes={customerQuotesApi.quotes}
+                    onUpdate={customerQuotesApi.update}
+                    onAdd={customerQuotesApi.add}
+                    onRemove={customerQuotesApi.remove}
+                    onResetAll={customerQuotesApi.resetAll}
+                    onResetField={customerQuotesApi.resetField}
+                  />
+                </div>
               )}
             </div>
           )}
 
           {activeTab === 'brand-facts' && (
-            <BrandFactsView
-              facts={brandFactsApi.facts}
-              onUpdate={brandFactsApi.update}
-              onAdd={brandFactsApi.add}
-              onRemove={brandFactsApi.remove}
-              onResetAll={brandFactsApi.resetAll}
-              onResetField={brandFactsApi.resetField}
-            />
+            <div className="relative" data-dev-code="BF">
+              <SectionTag code="BF" floating />
+              <BrandFactsView
+                facts={brandFactsApi.facts}
+                onUpdate={brandFactsApi.update}
+                onAdd={brandFactsApi.add}
+                onRemove={brandFactsApi.remove}
+                onResetAll={brandFactsApi.resetAll}
+                onResetField={brandFactsApi.resetField}
+              />
+            </div>
           )}
         </div>
       </main>
@@ -886,15 +914,17 @@ interface SubTabButtonProps {
   readonly icon: React.ReactNode;
   readonly label: string;
   readonly count: number;
+  readonly devCode?: string;
 }
 
-function SubTabButton({ active, onClick, icon, label, count }: SubTabButtonProps) {
+function SubTabButton({ active, onClick, icon, label, count, devCode }: SubTabButtonProps) {
   return (
     <button
       type="button"
       role="tab"
       aria-selected={active}
       onClick={onClick}
+      data-dev-code={devCode}
       className="inline-flex items-center gap-1.5 px-3 py-2 text-sm transition-colors -mb-px border-b-2"
       style={active
         ? { color: 'var(--color-accent)', borderBottomColor: 'var(--color-accent)' }
@@ -915,6 +945,7 @@ function SubTabButton({ active, onClick, icon, label, count }: SubTabButtonProps
           {count}
         </span>
       )}
+      {devCode && <SectionTag code={devCode} className="ml-1 opacity-70" />}
     </button>
   );
 }

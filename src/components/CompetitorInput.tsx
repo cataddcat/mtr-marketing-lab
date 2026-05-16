@@ -19,7 +19,7 @@ export function CompetitorInput({ value, onChange }: Props) {
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="flex-1 min-h-[64px] rounded-md inline-flex items-center justify-center gap-2 text-sm text-fg-3 hover:text-accent transition-colors border border-dashed border-border hover:bg-bg-hover"
+          className="flex-1 min-h-[140px] rounded-md inline-flex items-center justify-center gap-2 text-sm text-fg-3 hover:text-accent transition-colors border border-dashed border-border hover:bg-bg-hover"
         >
           <Plus className="w-4 h-4" strokeWidth={1.5} aria-hidden="true" />
           <span lang="th">Advanced · เพิ่ม ad คู่แข่ง</span>
@@ -65,10 +65,10 @@ export function CompetitorInput({ value, onChange }: Props) {
         id={fieldId}
         value={value}
         onChange={e => onChange(e.target.value)}
-        rows={2}
+        rows={5}
         placeholder="วาง ad คู่แข่ง — Judge จะเปรียบเทียบให้"
         lang="th"
-        className="w-full min-h-[64px] resize-none rounded-md border border-border bg-bg px-3 py-2 text-sm leading-relaxed text-fg-1 placeholder:text-fg-4 transition-colors hover:border-border-strong focus:border-accent"
+        className="w-full min-h-[140px] resize-none rounded-md border border-border bg-bg px-3 py-2 text-sm leading-relaxed text-fg-1 placeholder:text-fg-4 transition-colors hover:border-border-strong focus:border-accent"
       />
     </div>
   );
