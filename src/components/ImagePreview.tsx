@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2, ImageIcon, RefreshCw, AlertCircle, Download } from 'lucide-react';
+import { Loader2, ImageIcon, RefreshCw, AlertCircle, Download, ChevronDown, ChevronUp } from 'lucide-react';
 import { generateImagePreview, ImageGenerationError } from '../services/image';
 
 interface Props {
@@ -17,8 +17,10 @@ type State =
 
 export function ImagePreview({ prompt, downloadName }: Props) {
   const [state, setState] = useState<State>({ status: 'idle' });
+  const [collapsed, setCollapsed] = useState(false);
 
   const run = async () => {
+    setCollapsed(false);
     setState({ status: 'loading' });
     try {
       const result = await generateImagePreview(prompt);
@@ -88,11 +90,17 @@ export function ImagePreview({ prompt, downloadName }: Props) {
     );
   }
 
+  const panelId = 'image-preview-panel';
   return (
     <div className="w-full space-y-2">
       <div
+        id={panelId}
         className="relative rounded-md overflow-hidden border"
-        style={{ background: 'var(--color-bg-sunken)', borderColor: 'var(--color-border)' }}
+        style={{
+          background: 'var(--color-bg-sunken)',
+          borderColor: 'var(--color-border)',
+          display: collapsed ? 'none' : 'block',
+        }}
       >
         <img
           src={state.src}
@@ -114,11 +122,43 @@ export function ImagePreview({ prompt, downloadName }: Props) {
           </span>
         )}
       </div>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] text-fg-4" lang="th">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="text-[10px] text-fg-4 inline-flex items-center gap-2" lang="th">
           FLUX-Schnell · ภาพประกอบไอเดีย ไม่ใช่ภาพจริง
+          {collapsed && (
+            <span
+              className="font-mono text-[9.5px] tracking-[0.08em] uppercase px-1.5 py-0.5 rounded-pill border"
+              style={{
+                background: 'var(--color-bg-sunken)',
+                color: 'var(--color-fg-3)',
+                borderColor: 'var(--color-border-faint)',
+              }}
+            >
+              พับอยู่
+            </span>
+          )}
         </span>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCollapsed(v => !v)}
+            aria-expanded={!collapsed}
+            aria-controls={panelId}
+            className="text-[11px] text-fg-3 hover:text-accent inline-flex items-center gap-1 min-h-[28px] transition-colors"
+            lang="th"
+          >
+            {collapsed ? (
+              <>
+                <ChevronDown className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+                กางออก
+              </>
+            ) : (
+              <>
+                <ChevronUp className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+                ย่อ
+              </>
+            )}
+          </button>
           <a
             href={state.src}
             download={downloadName ?? 'mtr-preview.png'}
