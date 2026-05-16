@@ -49,6 +49,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'generator' | 'library'>('generator');
   const [factsPanelOpen, setFactsPanelOpen] = useState(false);
   const [quotesPanelOpen, setQuotesPanelOpen] = useState(false);
+  const [quotesActivePersona, setQuotesActivePersona] = useState<PersonaId>('family_man');
   const [performanceTarget, setPerformanceTarget] = useState<string | null>(null);
   const [translateTarget, setTranslateTarget] = useState<string | null>(null);
   const productId = useId();
@@ -868,7 +869,12 @@ ${personaLines}
         open={quotesPanelOpen}
         onClose={() => setQuotesPanelOpen(false)}
         title="เสียงลูกค้าจริง"
-        headerAction={<CustomerQuotesAddButton onAdd={customerQuotesApi.add} />}
+        headerAction={
+          <CustomerQuotesAddButton
+            activePersona={quotesActivePersona}
+            onAdd={customerQuotesApi.add}
+          />
+        }
       >
         <CustomerQuotesView
           quotes={customerQuotesApi.quotes}
@@ -877,6 +883,8 @@ ${personaLines}
           onRemove={customerQuotesApi.remove}
           onResetAll={customerQuotesApi.resetAll}
           onResetField={customerQuotesApi.resetField}
+          activePersona={quotesActivePersona}
+          onActivePersonaChange={setQuotesActivePersona}
         />
       </Sheet>
 

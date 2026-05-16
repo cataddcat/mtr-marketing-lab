@@ -100,12 +100,14 @@ export function selectCalibrationExamples(
   const neutral = ranked.filter(r => !r.outcome);
 
   const picked: CalibrationSource[] = [];
-  const take = (arr: CalibrationSource[], n: number) => {
+  const take = (arr: readonly CalibrationSource[], n: number) => {
+    let added = 0;
     for (const item of arr) {
       if (picked.length >= MAX_EXAMPLES) break;
+      if (added >= n) break;
       if (picked.includes(item)) continue;
       picked.push(item);
-      if (picked.filter(p => p === item).length >= n) break;
+      added++;
     }
   };
   // Bias toward "used-bad" (negative examples are more corrective for an LLM

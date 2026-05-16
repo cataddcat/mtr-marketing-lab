@@ -11,6 +11,12 @@ interface Props {
   readonly onRemove: (id: string) => void;
   readonly onResetAll: () => void;
   readonly onResetField: (id: string) => void;
+  /**
+   * Controlled active persona — lifted to the parent so a sibling Add button
+   * (rendered in Sheet's headerAction) can also use it.
+   */
+  readonly activePersona: PersonaId;
+  readonly onActivePersonaChange: (pid: PersonaId) => void;
 }
 
 const PERSONA_ORDER: readonly PersonaId[] = [
@@ -22,7 +28,8 @@ const PERSONA_ORDER: readonly PersonaId[] = [
 
 /**
  * Body-only view (no outer card/header). Mount inside a <Sheet> — Sheet provides
- * the title bar. Use `CustomerQuotesAddButton` as the Sheet headerAction.
+ * the title bar. Use `CustomerQuotesAddButton` as the Sheet headerAction with
+ * the same `activePersona` so "+ Add" inserts into the visible persona tab.
  */
 export function CustomerQuotesView({
   quotes,
@@ -31,8 +38,9 @@ export function CustomerQuotesView({
   onRemove,
   onResetAll,
   onResetField,
+  activePersona,
+  onActivePersonaChange,
 }: Props) {
-  const [activePersona, setActivePersona] = useState<PersonaId>('family_man');
   const [confirmReset, setConfirmReset] = useState(false);
 
   const activeQuotes = quotes.filter(q => q.persona === activePersona);
@@ -61,7 +69,7 @@ export function CustomerQuotesView({
               type="button"
               role="tab"
               aria-selected={active}
-              onClick={() => setActivePersona(pid)}
+              onClick={() => onActivePersonaChange(pid)}
               className="shrink-0 min-h-[36px] px-3 text-xs rounded-md transition-colors inline-flex items-center gap-1.5 border"
               style={active
                 ? {
@@ -185,11 +193,11 @@ export function CustomerQuotesView({
 }
 
 interface AddButtonProps {
-  readonly activePersona?: PersonaId;
+  readonly activePersona: PersonaId;
   readonly onAdd: (persona: PersonaId) => void;
 }
 
-export function CustomerQuotesAddButton({ activePersona = 'family_man', onAdd }: AddButtonProps) {
+export function CustomerQuotesAddButton({ activePersona, onAdd }: AddButtonProps) {
   return (
     <button
       type="button"

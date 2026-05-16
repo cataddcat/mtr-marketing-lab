@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 
 interface Props {
   readonly open: boolean;
@@ -17,15 +17,19 @@ interface Props {
 export function Sheet({ open, onClose, title, children, headerAction }: Props) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
-
-  const handleClose = useCallback(() => {
-    onClose();
-  }, [onClose]);
+  // Keep a ref to onClose so the open-effect doesn't have to depend on it.
+  // Without this, parents that pass inline arrow callbacks (the common case)
+  // re-run the effect on every render — which would re-steal focus from
+  // anything the user is typing inside the dialog.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') handleClose();
+      if (e.key === 'Escape') onCloseRef.current();
     };
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
@@ -35,7 +39,7 @@ export function Sheet({ open, onClose, title, children, headerAction }: Props) {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [open, handleClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -44,7 +48,7 @@ export function Sheet({ open, onClose, title, children, headerAction }: Props) {
       className="fixed inset-0 z-40 backdrop-blur-sm flex items-end md:items-center justify-center"
       style={{ background: 'rgba(0, 0, 0, 0.55)' }}
       onMouseDown={e => {
-        if (e.target === e.currentTarget) handleClose();
+        if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
@@ -66,7 +70,7 @@ export function Sheet({ open, onClose, title, children, headerAction }: Props) {
         >
           <button
             type="button"
-            onClick={handleClose}
+            onClick={onClose}
             className="justify-self-start text-sm font-medium min-h-[44px] px-2 transition-colors"
             style={{ color: 'var(--color-accent)' }}
             lang="th"
