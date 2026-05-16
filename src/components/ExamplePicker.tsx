@@ -41,9 +41,9 @@ export function ExamplePicker({ examples, onPick, label }: Props) {
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
         aria-label={`เลือก${label}ตัวอย่าง`}
-        className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-hermes transition-colors min-h-[36px] px-2 -my-1 -mr-2 rounded-md"
+        className="inline-flex items-center gap-1 text-xs text-fg-3 hover:text-accent transition-colors min-h-[28px] px-2 -my-1 -mr-2 rounded-md"
       >
-        <Sparkles className="w-3 h-3" aria-hidden="true" />
+        <Sparkles className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
         ตัวอย่าง
       </button>
       {open && (
@@ -51,7 +51,12 @@ export function ExamplePicker({ examples, onPick, label }: Props) {
           id={listId}
           role="listbox"
           aria-labelledby={buttonId}
-          className="absolute right-0 top-full mt-1 z-30 w-72 max-h-72 overflow-y-auto bg-panel border border-gray-700 rounded-lg shadow-card divide-y divide-gray-800/60"
+          className="absolute right-0 top-full mt-1 z-30 w-72 max-h-72 overflow-y-auto rounded-md border"
+          style={{
+            background: 'var(--color-bg-elevated)',
+            borderColor: 'var(--color-border)',
+            boxShadow: 'var(--shadow-2)',
+          }}
         >
           {examples.map((ex, i) => (
             <button
@@ -63,7 +68,9 @@ export function ExamplePicker({ examples, onPick, label }: Props) {
                 onPick(ex);
                 setOpen(false);
               }}
-              className="w-full text-left px-3 py-2.5 text-sm text-gray-200 hover:bg-hermes/10 hover:text-hermes transition-colors min-h-[44px] leading-snug"
+              className="w-full text-left px-3 py-2.5 text-sm text-fg-2 hover:bg-bg-hover hover:text-accent transition-colors min-h-[40px] leading-snug border-b last:border-b-0"
+              style={{ borderColor: 'var(--color-border-faint)' }}
+              lang="th"
             >
               {ex}
             </button>

@@ -10,11 +10,13 @@ export function EnsembleBadge({ meta }: Props) {
   const unstableCount = variance.unstable_fields.length;
   const stable = unstableCount === 0;
 
-  const tone = stable
-    ? 'border-green-700/40 text-green-300 bg-green-900/20'
+  const toneVar = stable
+    ? '--color-success'
     : variance.max_std > 2
-      ? 'border-orange-700/50 text-orange-200 bg-orange-900/20'
-      : 'border-amber-700/40 text-amber-200 bg-amber-900/15';
+      ? '--color-warning'
+      : '--color-gold-500';
+
+  const color = `var(${toneVar})`;
 
   const label = stable
     ? 'คะแนนนิ่ง'
@@ -29,10 +31,16 @@ export function EnsembleBadge({ meta }: Props) {
   return (
     <span
       title={tooltip}
-      className={`inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full border ${tone}`}
+      lang="th"
+      className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-pill border"
+      style={{
+        color,
+        background: `color-mix(in oklch, ${color} 12%, transparent)`,
+        borderColor: `color-mix(in oklch, ${color} 35%, transparent)`,
+      }}
     >
-      <Microscope className="w-3 h-3" aria-hidden="true" />
-      <span className="font-medium">{runs} รอบ</span>
+      <Microscope className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+      <span className="font-medium font-mono">{runs} รอบ</span>
       <span className="opacity-60">·</span>
       <span>{label}</span>
     </span>

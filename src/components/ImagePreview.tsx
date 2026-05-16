@@ -40,9 +40,10 @@ export function ImagePreview({ prompt, downloadName }: Props) {
         type="button"
         onClick={run}
         disabled={prompt.trim().length === 0}
-        className="w-full text-xs px-3 py-2 min-h-[44px] bg-gray-800 hover:bg-gray-700 disabled:opacity-50 rounded text-gray-300 flex items-center justify-center gap-2 transition-colors border border-dashed border-gray-700 hover:border-hermes/40"
+        className="w-full text-xs px-3 py-2 min-h-[36px] disabled:opacity-50 rounded-md text-fg-2 hover:text-accent hover:bg-bg-hover flex items-center justify-center gap-2 transition-colors border border-dashed"
+        style={{ borderColor: 'var(--color-border)' }}
       >
-        <ImageIcon className="w-3 h-3" aria-hidden="true" />
+        <ImageIcon className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
         ดูภาพตัวอย่าง (Workers AI)
       </button>
     );
@@ -50,8 +51,12 @@ export function ImagePreview({ prompt, downloadName }: Props) {
 
   if (state.status === 'loading') {
     return (
-      <div className="w-full p-4 min-h-[44px] bg-gray-800/50 rounded-md flex items-center justify-center gap-2 text-xs text-gray-400 border border-gray-700">
-        <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+      <div
+        className="w-full p-4 min-h-[36px] rounded-md flex items-center justify-center gap-2 text-xs text-fg-3 border"
+        style={{ background: 'var(--color-bg-sunken)', borderColor: 'var(--color-border-faint)' }}
+        lang="th"
+      >
+        <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.5} aria-hidden="true" />
         กำลังสร้างภาพ... (~5-10 วินาที)
       </div>
     );
@@ -59,17 +64,24 @@ export function ImagePreview({ prompt, downloadName }: Props) {
 
   if (state.status === 'error') {
     return (
-      <div className="w-full p-3 bg-red-900/20 border border-red-900/40 rounded-md space-y-2">
-        <p className="text-xs text-red-300 flex items-start gap-1.5">
-          <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" aria-hidden="true" />
+      <div
+        className="w-full p-3 rounded-md space-y-2 border"
+        style={{
+          background: 'var(--color-danger-bg)',
+          borderColor: 'color-mix(in oklch, var(--color-danger) 35%, transparent)',
+        }}
+      >
+        <p className="text-xs flex items-start gap-1.5" style={{ color: 'var(--color-danger)' }} lang="th">
+          <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" strokeWidth={1.5} aria-hidden="true" />
           <span>สร้างภาพไม่สำเร็จ: {state.message}</span>
         </p>
         <button
           type="button"
           onClick={run}
-          className="text-xs text-red-200 hover:text-white inline-flex items-center gap-1 min-h-[36px] px-2 -mx-1 rounded"
+          className="text-xs inline-flex items-center gap-1 min-h-[28px] px-2 -mx-1 rounded transition-colors hover:bg-bg-hover"
+          style={{ color: 'var(--color-danger)' }}
         >
-          <RefreshCw className="w-3 h-3" aria-hidden="true" />
+          <RefreshCw className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
           ลองอีกครั้ง
         </button>
       </div>
@@ -78,7 +90,10 @@ export function ImagePreview({ prompt, downloadName }: Props) {
 
   return (
     <div className="w-full space-y-2">
-      <div className="relative rounded-md overflow-hidden border border-gray-700 bg-black/40">
+      <div
+        className="relative rounded-md overflow-hidden border"
+        style={{ background: 'var(--color-bg-sunken)', borderColor: 'var(--color-border)' }}
+      >
         <img
           src={state.src}
           alt={`AI preview of: ${prompt.slice(0, 100)}`}
@@ -86,30 +101,38 @@ export function ImagePreview({ prompt, downloadName }: Props) {
           loading="lazy"
         />
         {state.cached && (
-          <span className="absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-full bg-black/70 text-gray-300 border border-gray-700">
+          <span
+            className="absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-pill border"
+            style={{
+              background: 'color-mix(in oklch, var(--color-bg-elevated) 80%, transparent)',
+              color: 'var(--color-fg-2)',
+              borderColor: 'var(--color-border)',
+              backdropFilter: 'blur(8px)',
+            }}
+          >
             cache
           </span>
         )}
       </div>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] text-gray-500">
+        <span className="text-[10px] text-fg-4" lang="th">
           FLUX-Schnell · ภาพประกอบไอเดีย ไม่ใช่ภาพจริง
         </span>
         <div className="flex items-center gap-2">
           <a
             href={state.src}
             download={downloadName ?? 'mtr-preview.png'}
-            className="text-[11px] text-gray-400 hover:text-hermes inline-flex items-center gap-1 min-h-[32px]"
+            className="text-[11px] text-fg-3 hover:text-accent inline-flex items-center gap-1 min-h-[28px] transition-colors"
           >
-            <Download className="w-3 h-3" aria-hidden="true" />
+            <Download className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
             บันทึก
           </a>
           <button
             type="button"
             onClick={run}
-            className="text-[11px] text-gray-400 hover:text-hermes inline-flex items-center gap-1 min-h-[32px]"
+            className="text-[11px] text-fg-3 hover:text-accent inline-flex items-center gap-1 min-h-[28px] transition-colors"
           >
-            <RefreshCw className="w-3 h-3" aria-hidden="true" />
+            <RefreshCw className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
             สร้างใหม่
           </button>
         </div>

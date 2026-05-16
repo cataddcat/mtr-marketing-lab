@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from 'react';
 import { CheckCircle, AlertCircle, Info, X } from 'lucide-react';
@@ -66,18 +67,30 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-const KIND_META: Record<ToastKind, { Icon: typeof CheckCircle; classes: string }> = {
+const KIND_META: Record<ToastKind, { Icon: typeof CheckCircle; style: CSSProperties }> = {
   success: {
     Icon: CheckCircle,
-    classes: 'bg-green-900/70 border-green-700/70 text-green-50',
+    style: {
+      background: 'var(--color-success-bg)',
+      color: 'var(--color-success)',
+      borderColor: 'color-mix(in oklch, var(--color-success) 35%, transparent)',
+    },
   },
   error: {
     Icon: AlertCircle,
-    classes: 'bg-red-900/70 border-red-700/70 text-red-50',
+    style: {
+      background: 'var(--color-danger-bg)',
+      color: 'var(--color-danger)',
+      borderColor: 'color-mix(in oklch, var(--color-danger) 35%, transparent)',
+    },
   },
   info: {
     Icon: Info,
-    classes: 'bg-gray-800/90 border-gray-600 text-gray-100',
+    style: {
+      background: 'var(--color-bg-elevated)',
+      color: 'var(--color-fg-1)',
+      borderColor: 'var(--color-border)',
+    },
   },
 };
 
@@ -93,22 +106,24 @@ const ToastViewport = ({ toasts, onDismiss }: ViewportProps) => (
     className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-[calc(100%-2rem)] pointer-events-none"
   >
     {toasts.map(t => {
-      const { Icon, classes } = KIND_META[t.kind];
+      const { Icon, style } = KIND_META[t.kind];
       return (
         <div
           key={t.id}
           role={t.kind === 'error' ? 'alert' : 'status'}
-          className={`toast-slide-in pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-lg border shadow-lg backdrop-blur-sm ${classes}`}
+          className="toast-slide-in pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-md border"
+          style={{ ...style, boxShadow: 'var(--shadow-3)' }}
         >
-          <Icon className="w-5 h-5 shrink-0 mt-0.5" aria-hidden="true" />
-          <span className="flex-1 text-sm leading-snug break-words">{t.message}</span>
+          <Icon className="w-5 h-5 shrink-0 mt-0.5" strokeWidth={1.5} aria-hidden="true" />
+          <span className="flex-1 text-sm leading-snug break-words" lang="th">{t.message}</span>
           <button
             type="button"
             onClick={() => onDismiss(t.id)}
-            className="shrink-0 -mr-1 -mt-1 p-1 rounded hover:bg-black/30 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+            className="shrink-0 -mr-1 -mt-1 p-1 rounded transition-colors hover:bg-bg-hover min-w-[32px] min-h-[32px] flex items-center justify-center"
             aria-label="ปิดการแจ้งเตือน"
+            style={{ color: 'inherit' }}
           >
-            <X className="w-4 h-4" aria-hidden="true" />
+            <X className="w-4 h-4" strokeWidth={1.5} aria-hidden="true" />
           </button>
         </div>
       );

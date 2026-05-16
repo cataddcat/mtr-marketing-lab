@@ -29,8 +29,6 @@ export function PerformancePanel({ open, onClose, adStyle, initial, onSave }: Pr
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  // State is initialized once on mount — parent re-mounts via `key` when the
-  // target ad changes, so we don't need to sync state with `initial` in an effect.
   const [reach, setReach] = useState(() => toStr(initial?.reach));
   const [impressions, setImpressions] = useState(() => toStr(initial?.impressions));
   const [clicks, setClicks] = useState(() => toStr(initial?.clicks));
@@ -80,7 +78,8 @@ export function PerformancePanel({ open, onClose, adStyle, initial, onSave }: Pr
 
   return (
     <div
-      className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center"
+      className="fixed inset-0 z-40 backdrop-blur-sm flex items-end md:items-center justify-center"
+      style={{ background: 'rgba(0, 0, 0, 0.55)' }}
       onMouseDown={e => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -91,36 +90,47 @@ export function PerformancePanel({ open, onClose, adStyle, initial, onSave }: Pr
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="sheet-up bg-panel border border-gray-800 rounded-t-2xl md:rounded-2xl w-full max-w-xl max-h-[92vh] md:max-h-[85vh] flex flex-col shadow-card outline-none"
+        className="sheet-up rounded-t-2xl md:rounded-xl w-full max-w-xl max-h-[92vh] md:max-h-[85vh] flex flex-col outline-none border"
+        style={{
+          background: 'var(--color-bg-elevated)',
+          borderColor: 'var(--color-border)',
+          boxShadow: 'var(--shadow-3)',
+        }}
       >
-        <header className="relative grid grid-cols-[1fr_auto_1fr] items-center px-3 py-2.5 border-b border-gray-800">
+        <header
+          className="relative grid grid-cols-[1fr_auto_1fr] items-center px-3 py-2.5 border-b"
+          style={{ borderColor: 'var(--color-border-faint)' }}
+        >
           <button
             type="button"
             onClick={onClose}
-            className="justify-self-start text-sm text-gray-400 hover:text-gray-100 min-h-[44px] px-2"
+            className="justify-self-start text-sm text-fg-3 hover:text-fg-1 min-h-[44px] px-2 transition-colors"
+            lang="th"
           >
             ยกเลิก
           </button>
-          <h2 id={titleId} className="justify-self-center text-[15px] font-semibold text-gray-100 truncate max-w-[60vw]">
+          <h2 id={titleId} className="justify-self-center text-[15px] font-semibold text-fg-1 truncate max-w-[60vw]" lang="th">
             ผลโฆษณา · {adStyle}
           </h2>
           <button
             type="button"
             onClick={handleSave}
-            className="justify-self-end text-sm text-hermes hover:text-orange-400 font-medium min-h-[44px] px-2"
+            className="justify-self-end text-sm font-medium min-h-[44px] px-2 transition-colors"
+            style={{ color: 'var(--color-accent)' }}
+            lang="th"
           >
             บันทึก
           </button>
         </header>
 
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
-          <p className="text-[12px] text-gray-400 leading-relaxed">
+          <p className="text-[12px] text-fg-3 leading-relaxed" lang="th">
             ใส่ตัวเลขจาก Facebook Ads Manager / Insights หลังจาก ad ลงไปแล้ว — ใช้สร้าง feedback loop ให้ระบบเรียนรู้ว่าโฆษณาแบบไหนทำงานจริง.
             <br />ทุก field optional — ใส่เท่าที่มีก็ได้.
           </p>
 
           <section className="space-y-3">
-            <h3 className="text-[11px] uppercase tracking-wide text-gray-500">การมองเห็น</h3>
+            <h3 className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3" lang="th">การมองเห็น</h3>
             <div className="grid grid-cols-2 gap-2">
               <NumField icon={Eye} label="Reach" value={reach} onChange={setReach} hint="คนเห็นไม่ซ้ำ" />
               <NumField icon={Eye} label="Impressions" value={impressions} onChange={setImpressions} hint="ครั้งที่แสดง" />
@@ -128,7 +138,7 @@ export function PerformancePanel({ open, onClose, adStyle, initial, onSave }: Pr
           </section>
 
           <section className="space-y-3">
-            <h3 className="text-[11px] uppercase tracking-wide text-gray-500">การโต้ตอบ</h3>
+            <h3 className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3" lang="th">การโต้ตอบ</h3>
             <div className="grid grid-cols-2 gap-2">
               <NumField icon={MousePointerClick} label="Clicks" value={clicks} onChange={setClicks} hint="คลิกที่ลิงก์" />
               <NumField icon={Bookmark} label="Saves" value={saves} onChange={setSaves} hint="บันทึกไว้ดู" />
@@ -138,13 +148,19 @@ export function PerformancePanel({ open, onClose, adStyle, initial, onSave }: Pr
           </section>
 
           <section className="space-y-3">
-            <h3 className="text-[11px] uppercase tracking-wide text-gray-500">ต้นทุน</h3>
+            <h3 className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3" lang="th">ต้นทุน</h3>
             <NumField icon={Receipt} label="ค่าโฆษณา (บาท)" value={cost} onChange={setCost} hint="รวมที่จ่ายให้ Meta/TikTok" />
           </section>
 
           {(ctr !== null || cpc !== null || cpm !== null) && (
-            <section className="bg-black/30 border border-gray-700 rounded-lg p-3 space-y-1.5">
-              <h3 className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">คำนวณอัตโนมัติ</h3>
+            <section
+              className="rounded-md p-3 space-y-1.5 border"
+              style={{
+                background: 'var(--color-bg-sunken)',
+                borderColor: 'var(--color-border-faint)',
+              }}
+            >
+              <h3 className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3 mb-2" lang="th">คำนวณอัตโนมัติ</h3>
               {ctr !== null && (
                 <Computed label="CTR (Click-through rate)" value={`${ctr.toFixed(2)}%`} />
               )}
@@ -158,13 +174,14 @@ export function PerformancePanel({ open, onClose, adStyle, initial, onSave }: Pr
           )}
 
           <section className="space-y-2">
-            <h3 className="text-[11px] uppercase tracking-wide text-gray-500">บันทึก</h3>
+            <h3 className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3" lang="th">บันทึก</h3>
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
               rows={3}
               maxLength={500}
               placeholder="เช่น 'ลงเสาร์-อาทิตย์ 5 วัน เริ่มแรงตั้งแต่วันที่ 2', 'ลูกค้าทักว่าราคา?'"
+              lang="th"
               className="w-full text-sm resize-y"
             />
           </section>
@@ -186,8 +203,8 @@ function NumField({ icon: Icon, label, value, onChange, hint }: NumFieldProps) {
   const inputId = useId();
   return (
     <div>
-      <label htmlFor={inputId} className="text-[11px] text-gray-400 mb-1 inline-flex items-center gap-1.5">
-        <Icon className="w-3 h-3 text-gray-500" aria-hidden="true" />
+      <label htmlFor={inputId} className="text-[11px] text-fg-3 mb-1 inline-flex items-center gap-1.5">
+        <Icon className="w-3 h-3 text-fg-4" strokeWidth={1.5} aria-hidden="true" />
         {label}
       </label>
       <input
@@ -197,7 +214,7 @@ function NumField({ icon: Icon, label, value, onChange, hint }: NumFieldProps) {
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={hint ?? '0'}
-        className="w-full min-h-[44px] text-sm tabular-nums"
+        className="w-full min-h-[40px] text-sm tabular-nums"
       />
     </div>
   );
@@ -206,8 +223,13 @@ function NumField({ icon: Icon, label, value, onChange, hint }: NumFieldProps) {
 function Computed({ label, value }: { readonly label: string; readonly value: string }) {
   return (
     <div className="flex items-center justify-between text-xs">
-      <span className="text-gray-400">{label}</span>
-      <span className="text-hermes font-semibold tabular-nums">{value}</span>
+      <span className="text-fg-3">{label}</span>
+      <span
+        className="font-mono font-medium tabular-nums"
+        style={{ color: 'var(--color-accent)' }}
+      >
+        {value}
+      </span>
     </div>
   );
 }

@@ -26,7 +26,8 @@ export function BrandFactRow({ fact, onUpdate, onReset, onDelete }: Props) {
           onChange={e => onUpdate(fact.id, { label: e.target.value })}
           placeholder="หัวข้อ"
           aria-label="หัวข้อ"
-          className="w-full bg-transparent border-0 px-0 py-0 text-[13px] font-medium text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-0"
+          lang="th"
+          className="w-full bg-transparent border-0 px-0 py-0 text-[13px] font-medium text-fg-1 placeholder:text-fg-4 focus:outline-none focus:ring-0"
         />
         <textarea
           id={valueId}
@@ -36,14 +37,16 @@ export function BrandFactRow({ fact, onUpdate, onReset, onDelete }: Props) {
           aria-label={`เนื้อหา ${fact.label}`}
           rows={1}
           maxLength={400}
-          className="w-full bg-transparent border-0 px-0 py-0 text-sm leading-relaxed text-gray-300 placeholder-gray-600 resize-y focus:outline-none focus:ring-0 min-h-[1.5rem] [field-sizing:content]"
+          lang="th"
+          className="w-full bg-transparent border-0 px-0 py-0 text-sm leading-relaxed text-fg-2 placeholder:text-fg-4 resize-y focus:outline-none focus:ring-0 min-h-[1.5rem] [field-sizing:content]"
         />
         <div className="flex items-center gap-4 pt-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
           {fact.isDefault && (
             <button
               type="button"
               onClick={() => onReset(fact.id)}
-              className="text-[11px] text-gray-500 hover:text-hermes transition-colors min-h-[24px]"
+              className="text-[11px] text-fg-3 hover:text-accent transition-colors min-h-[24px]"
+              lang="th"
             >
               คืนค่าเริ่มต้น
             </button>
@@ -51,7 +54,11 @@ export function BrandFactRow({ fact, onUpdate, onReset, onDelete }: Props) {
           <button
             type="button"
             onClick={() => onDelete(fact.id)}
-            className="text-[11px] text-gray-500 hover:text-red-400 transition-colors min-h-[24px]"
+            className="text-[11px] text-fg-3 transition-colors min-h-[24px]"
+            style={{ color: 'var(--color-fg-3)' }}
+            onMouseOver={(e) => { e.currentTarget.style.color = 'var(--color-danger)'; }}
+            onMouseOut={(e) => { e.currentTarget.style.color = 'var(--color-fg-3)'; }}
+            lang="th"
           >
             ลบ
           </button>
@@ -84,14 +91,17 @@ function Toggle({ checked, onChange, label }: ToggleProps) {
     >
       <span
         aria-hidden="true"
-        className={`relative inline-block h-[26px] w-[44px] rounded-full transition-colors duration-200 ${
-          checked ? 'bg-hermes' : 'bg-gray-700'
-        }`}
+        className="relative inline-block h-[26px] w-[44px] rounded-pill transition-colors duration-200"
+        style={{ background: checked ? 'var(--color-accent)' : 'var(--color-border)' }}
       >
         <span
-          className={`absolute top-[2px] left-[2px] inline-block h-[22px] w-[22px] rounded-full bg-white shadow-[0_2px_4px_rgba(0,0,0,0.35)] transition-transform duration-200 ease-out ${
+          className={`absolute top-[2px] left-[2px] inline-block h-[22px] w-[22px] rounded-full transition-transform duration-200 ease-out ${
             checked ? 'translate-x-[18px]' : 'translate-x-0'
           }`}
+          style={{
+            background: 'var(--color-paper)',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.18)',
+          }}
         />
       </span>
     </button>

@@ -46,3 +46,15 @@ export function scoreColorVar(c: ScoreClass | null): string {
     great: 'var(--color-great)',
   })[c];
 }
+
+/** Returns the CSS var that holds the tinted background for this score class (for pills). */
+export function scoreBgVar(c: ScoreClass | null): string {
+  if (!c) return 'var(--color-bg-sunken)';
+  return ({
+    bad:   'var(--color-danger-bg)',
+    warn:  'var(--color-warning-bg)',
+    ok:    'var(--color-info-bg)',
+    good:  'var(--color-success-bg)',
+    great: 'var(--color-great-bg)',
+  })[c];
+}

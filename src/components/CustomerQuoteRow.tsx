@@ -28,7 +28,8 @@ export function CustomerQuoteRow({ quote, onUpdate, onReset, onDelete }: Props) 
           aria-label="คำพูดของลูกค้า"
           rows={2}
           maxLength={400}
-          className="w-full bg-transparent border-0 px-0 py-0 text-sm leading-relaxed text-gray-100 placeholder-gray-600 resize-y focus:outline-none focus:ring-0 min-h-[2.5rem] [field-sizing:content]"
+          lang="th"
+          className="w-full bg-transparent border-0 px-0 py-0 text-sm leading-relaxed text-fg-1 placeholder:text-fg-4 resize-y focus:outline-none focus:ring-0 min-h-[2.5rem] [field-sizing:content]"
         />
         <input
           id={contextId}
@@ -37,25 +38,31 @@ export function CustomerQuoteRow({ quote, onUpdate, onReset, onDelete }: Props) 
           onChange={e => onUpdate(quote.id, { context: e.target.value })}
           placeholder="บริบท เช่น 'หลังติดตั้ง 1 เดือน', 'จาก FB comment' (optional)"
           aria-label="บริบทของคำพูด"
-          className="w-full bg-transparent border-0 px-0 py-0 text-[11px] text-gray-400 placeholder-gray-600 focus:outline-none focus:ring-0 min-h-[28px]"
+          lang="th"
+          className="w-full bg-transparent border-0 px-0 py-0 text-[11px] text-fg-3 placeholder:text-fg-4 focus:outline-none focus:ring-0 min-h-[28px]"
         />
         <div className="flex items-center gap-4 pt-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
           {quote.isDefault && (
             <button
               type="button"
               onClick={() => onReset(quote.id)}
-              className="text-[11px] text-gray-500 hover:text-hermes transition-colors min-h-[24px] inline-flex items-center gap-1"
+              className="text-[11px] text-fg-3 hover:text-accent transition-colors min-h-[24px] inline-flex items-center gap-1"
+              lang="th"
             >
-              <RotateCcw className="w-3 h-3" aria-hidden="true" />
+              <RotateCcw className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
               คืนค่า
             </button>
           )}
           <button
             type="button"
             onClick={() => onDelete(quote.id)}
-            className="text-[11px] text-gray-500 hover:text-red-400 transition-colors min-h-[24px] inline-flex items-center gap-1"
+            className="text-[11px] transition-colors min-h-[24px] inline-flex items-center gap-1"
+            style={{ color: 'var(--color-fg-3)' }}
+            onMouseOver={(e) => { e.currentTarget.style.color = 'var(--color-danger)'; }}
+            onMouseOut={(e) => { e.currentTarget.style.color = 'var(--color-fg-3)'; }}
+            lang="th"
           >
-            <Trash2 className="w-3 h-3" aria-hidden="true" />
+            <Trash2 className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
             ลบ
           </button>
         </div>
@@ -87,14 +94,17 @@ function Toggle({ checked, onChange, label }: ToggleProps) {
     >
       <span
         aria-hidden="true"
-        className={`relative inline-block h-[26px] w-[44px] rounded-full transition-colors duration-200 ${
-          checked ? 'bg-hermes' : 'bg-gray-700'
-        }`}
+        className="relative inline-block h-[26px] w-[44px] rounded-pill transition-colors duration-200"
+        style={{ background: checked ? 'var(--color-accent)' : 'var(--color-border)' }}
       >
         <span
-          className={`absolute top-[2px] left-[2px] inline-block h-[22px] w-[22px] rounded-full bg-white shadow-[0_2px_4px_rgba(0,0,0,0.35)] transition-transform duration-200 ease-out ${
+          className={`absolute top-[2px] left-[2px] inline-block h-[22px] w-[22px] rounded-full transition-transform duration-200 ease-out ${
             checked ? 'translate-x-[18px]' : 'translate-x-0'
           }`}
+          style={{
+            background: 'var(--color-paper)',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.18)',
+          }}
         />
       </span>
     </button>

@@ -54,7 +54,8 @@ export function BrandFactsPanel({
 
   return (
     <div
-      className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center"
+      className="fixed inset-0 z-40 backdrop-blur-sm flex items-end md:items-center justify-center"
+      style={{ background: 'rgba(0, 0, 0, 0.55)' }}
       onMouseDown={e => {
         if (e.target === e.currentTarget) handleClose();
       }}
@@ -65,19 +66,30 @@ export function BrandFactsPanel({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="sheet-up bg-panel border border-gray-800 rounded-t-2xl md:rounded-2xl w-full max-w-xl max-h-[90vh] md:max-h-[80vh] flex flex-col shadow-card outline-none"
+        className="sheet-up rounded-t-2xl md:rounded-xl w-full max-w-xl max-h-[90vh] md:max-h-[80vh] flex flex-col outline-none border"
+        style={{
+          background: 'var(--color-bg-elevated)',
+          borderColor: 'var(--color-border)',
+          boxShadow: 'var(--shadow-3)',
+        }}
       >
-        <header className="relative grid grid-cols-[1fr_auto_1fr] items-center px-3 py-2.5 border-b border-gray-800">
+        <header
+          className="relative grid grid-cols-[1fr_auto_1fr] items-center px-3 py-2.5 border-b"
+          style={{ borderColor: 'var(--color-border-faint)' }}
+        >
           <button
             type="button"
             onClick={handleClose}
-            className="justify-self-start text-sm text-hermes hover:text-orange-400 font-medium min-h-[44px] px-2"
+            className="justify-self-start text-sm font-medium min-h-[44px] px-2 transition-colors"
+            style={{ color: 'var(--color-accent)' }}
+            lang="th"
           >
             เสร็จ
           </button>
           <h2
             id={titleId}
-            className="justify-self-center text-[15px] font-semibold text-gray-100"
+            className="justify-self-center text-[15px] font-semibold text-fg-1"
+            lang="th"
           >
             ข้อมูลร้าน
           </h2>
@@ -85,13 +97,13 @@ export function BrandFactsPanel({
             type="button"
             onClick={() => onAdd('หัวข้อใหม่', '')}
             aria-label="เพิ่มข้อมูลใหม่"
-            className="justify-self-end inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-md text-gray-300 hover:text-hermes hover:bg-gray-800 transition-colors"
+            className="justify-self-end inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-md text-fg-2 hover:text-accent hover:bg-bg-hover transition-colors"
           >
-            <Plus className="w-5 h-5" aria-hidden="true" />
+            <Plus className="w-5 h-5" strokeWidth={1.5} aria-hidden="true" />
           </button>
         </header>
 
-        <div className="px-4 pt-3 pb-1 text-[11px] uppercase tracking-wide text-gray-500">
+        <div className="px-4 pt-3 pb-1 font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3" lang="th">
           {activeCount} จาก {facts.length} รายการกำลังใช้งาน
         </div>
 
@@ -99,22 +111,35 @@ export function BrandFactsPanel({
           {facts.length === 0 ? (
             <div
               role="status"
-              className="m-4 text-center text-sm text-gray-500 py-10 border border-dashed border-gray-800 rounded-xl"
+              className="m-4 text-center text-sm text-fg-3 py-10 border border-dashed rounded-md"
+              style={{ borderColor: 'var(--color-border)' }}
+              lang="th"
             >
               ยังไม่มีข้อมูลร้าน
               <br />
               <button
                 type="button"
                 onClick={onResetAll}
-                className="text-hermes hover:underline mt-2 inline-block min-h-[44px]"
+                className="hover:underline mt-2 inline-block min-h-[44px]"
+                style={{ color: 'var(--color-accent)' }}
               >
                 คืนค่าเริ่มต้นทั้งหมด
               </button>
             </div>
           ) : (
-            <ul className="bg-black/30 border border-gray-800 rounded-xl divide-y divide-gray-800 overflow-hidden">
-              {facts.map(f => (
-                <li key={f.id}>
+            <ul
+              className="rounded-md overflow-hidden border list-none p-0"
+              style={{
+                background: 'var(--color-bg-sunken)',
+                borderColor: 'var(--color-border-faint)',
+              }}
+            >
+              {facts.map((f, i) => (
+                <li
+                  key={f.id}
+                  className={i > 0 ? 'border-t' : ''}
+                  style={i > 0 ? { borderColor: 'var(--color-border-faint)' } : undefined}
+                >
                   <BrandFactRow
                     fact={f}
                     onUpdate={onUpdate}
@@ -127,14 +152,18 @@ export function BrandFactsPanel({
           )}
         </div>
 
-        <footer className="flex items-center justify-between gap-3 px-4 py-2.5 border-t border-gray-800 min-h-[52px]">
+        <footer
+          className="flex items-center justify-between gap-3 px-4 py-2.5 border-t min-h-[52px]"
+          style={{ borderColor: 'var(--color-border-faint)' }}
+        >
           {confirmReset ? (
             <>
-              <span className="text-xs text-gray-400 flex-1">คืนค่าเริ่มต้นทั้งหมด?</span>
+              <span className="text-xs text-fg-3 flex-1" lang="th">คืนค่าเริ่มต้นทั้งหมด?</span>
               <button
                 type="button"
                 onClick={() => setConfirmReset(false)}
-                className="text-sm text-gray-400 hover:text-gray-100 min-h-[44px] px-3"
+                className="text-sm text-fg-3 hover:text-fg-1 min-h-[44px] px-3 transition-colors"
+                lang="th"
               >
                 ยกเลิก
               </button>
@@ -144,7 +173,9 @@ export function BrandFactsPanel({
                   onResetAll();
                   setConfirmReset(false);
                 }}
-                className="text-sm text-red-400 hover:text-red-300 font-medium min-h-[44px] px-3"
+                className="text-sm font-medium min-h-[44px] px-3 transition-colors"
+                style={{ color: 'var(--color-danger)' }}
+                lang="th"
               >
                 คืนค่า
               </button>
@@ -153,7 +184,8 @@ export function BrandFactsPanel({
             <button
               type="button"
               onClick={() => setConfirmReset(true)}
-              className="text-xs text-gray-500 hover:text-gray-300 min-h-[44px] px-2"
+              className="text-xs text-fg-3 hover:text-fg-1 min-h-[44px] px-2 transition-colors"
+              lang="th"
             >
               คืนค่าเริ่มต้นทั้งหมด
             </button>

@@ -1,68 +1,68 @@
 import { Sparkles } from 'lucide-react';
 import { CHANNEL_LABELS, type ChannelFit } from '../lib/schemas';
+import { ScoreBar } from './ScoreBar';
+import { scoreClass, scoreColorVar } from '../lib/score';
 
 interface Props {
   readonly channelFit: ChannelFit;
 }
 
-const barColor = (v: number): string => {
-  if (v >= 8) return 'bg-green-500';
-  if (v >= 6) return 'bg-hermes';
-  return 'bg-gray-500';
-};
-
 export function ChannelFitPanel({ channelFit }: Props) {
   return (
     <section
       aria-label="ช่องทางที่เหมาะ"
-      className="bg-black/30 border border-gray-700 rounded-lg p-3"
+      className="rounded-md p-4 border"
+      style={{
+        background: 'var(--color-bg-elevated)',
+        borderColor: 'var(--color-border-faint)',
+      }}
     >
-      <header className="flex items-center justify-between mb-2.5">
-        <h4 className="text-[11px] uppercase tracking-wide text-gray-500">
+      <header className="flex items-center justify-between mb-3 pb-3 border-b" style={{ borderColor: 'var(--color-border-faint)' }}>
+        <h4 className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3 font-medium">
           ช่องทางที่เหมาะ
         </h4>
-        <span className="text-[10px] text-hermes inline-flex items-center gap-1">
-          <Sparkles className="w-2.5 h-2.5" aria-hidden="true" />
-          แนะนำ {CHANNEL_LABELS[channelFit.best]}
+        <span
+          className="font-mono text-[10px] tracking-[0.08em] uppercase inline-flex items-center gap-1"
+          style={{ color: 'var(--color-accent)' }}
+        >
+          <Sparkles className="w-2.5 h-2.5" strokeWidth={1.5} aria-hidden="true" />
+          {CHANNEL_LABELS[channelFit.best]}
         </span>
       </header>
-      <ul className="space-y-2">
-        {channelFit.ranked.map(item => {
+      <ul className="space-y-2.5 list-none p-0">
+        {channelFit.ranked.map((item) => {
           const isBest = item.channel === channelFit.best;
-          const pct = Math.max(0, Math.min(10, item.score)) * 10;
+          const cls = scoreClass(item.score);
           return (
             <li key={item.channel}>
               <div className="flex items-baseline justify-between gap-2 mb-1">
                 <span
-                  className={`text-[11px] ${
-                    isBest ? 'text-hermes font-medium' : 'text-gray-400'
-                  }`}
+                  className="text-[12px]"
+                  style={{
+                    color: isBest ? 'var(--color-accent)' : 'var(--color-fg-2)',
+                    fontWeight: isBest ? 500 : 400,
+                  }}
                 >
                   {CHANNEL_LABELS[item.channel]}
                   {isBest && <span className="ml-1 text-[9px]">★</span>}
                 </span>
-                <span className="text-xs font-semibold text-gray-100 tabular-nums">
-                  {item.score}<span className="text-gray-600 font-normal">/10</span>
+                <span
+                  className="font-mono text-xs font-medium tabular-nums"
+                  style={{ color: scoreColorVar(cls) }}
+                >
+                  {item.score}<span className="text-fg-4 text-[10px] font-normal">/10</span>
                 </span>
               </div>
-              <div
-                className="h-1 bg-gray-800/80 rounded-full overflow-hidden"
-                role="meter"
-                aria-valuenow={item.score}
-                aria-valuemin={0}
-                aria-valuemax={10}
-                aria-label={`${CHANNEL_LABELS[item.channel]} ${item.score} of 10`}
-              >
-                <div
-                  className={`h-full ${barColor(item.score)} rounded-full transition-[width] duration-300`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
+              <ScoreBar value={item.score} size="thin" />
             </li>
           );
         })}
       </ul>
-      <p className="text-[11px] text-gray-400 leading-relaxed mt-2.5 pt-2.5 border-t border-gray-800">
+      <p
+        className="text-[12px] text-fg-2 leading-relaxed mt-3 pt-3 border-t"
+        style={{ borderColor: 'var(--color-border-faint)' }}
+        lang="th"
+      >
         {channelFit.reasoning}
       </p>
     </section>

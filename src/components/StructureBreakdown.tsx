@@ -1,14 +1,10 @@
 import type { StructureScore } from '../lib/schemas';
+import { LevelMeter } from './LevelMeter';
+import { scoreClass, scoreColorVar } from '../lib/score';
 
 interface Props {
   readonly structure: StructureScore;
 }
-
-const barColor = (v: number): string => {
-  if (v >= 8) return 'bg-green-500';
-  if (v >= 6) return 'bg-hermes';
-  return 'bg-orange-400/70';
-};
 
 interface PartProps {
   readonly label: string;
@@ -17,31 +13,25 @@ interface PartProps {
 }
 
 function Part({ label, score, critique }: PartProps) {
-  const pct = Math.max(0, Math.min(10, score)) * 10;
+  const cls = scoreClass(score);
   return (
-    <div className="space-y-1">
+    <div
+      className="space-y-2 py-3 border-t first:border-t-0 first:pt-0 last:pb-0"
+      style={{ borderColor: 'var(--color-border-faint)' }}
+    >
       <div className="flex items-baseline justify-between gap-2">
-        <dt className="text-[11px] uppercase tracking-wide text-gray-400 font-medium">
+        <dt className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3 font-medium">
           {label}
         </dt>
-        <dd className="text-xs font-semibold text-gray-100 tabular-nums">
-          {score}<span className="text-gray-600 font-normal">/10</span>
+        <dd
+          className="font-mono text-sm font-medium tabular-nums"
+          style={{ color: scoreColorVar(cls) }}
+        >
+          {score}<span className="text-fg-4 text-[10px] font-normal">/10</span>
         </dd>
       </div>
-      <div
-        className="h-1.5 bg-gray-800/80 rounded-full overflow-hidden"
-        role="meter"
-        aria-valuenow={score}
-        aria-valuemin={0}
-        aria-valuemax={10}
-        aria-label={`${label} ${score} of 10`}
-      >
-        <div
-          className={`h-full ${barColor(score)} rounded-full transition-[width] duration-300`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <p className="text-[11px] text-gray-400 leading-relaxed">{critique}</p>
+      <LevelMeter value={score} />
+      <p className="text-[12.5px] text-fg-2 leading-relaxed" lang="th">{critique}</p>
     </div>
   );
 }
@@ -50,24 +40,24 @@ export function StructureBreakdown({ structure }: Props) {
   return (
     <section
       aria-label="โครงสร้างโฆษณา (Hook / Body / CTA)"
-      className="bg-black/30 border border-gray-700 rounded-lg p-3"
+      className="rounded-md p-4 border"
+      style={{
+        background: 'var(--color-bg-elevated)',
+        borderColor: 'var(--color-border-faint)',
+      }}
     >
-      <header className="flex items-center justify-between mb-2.5">
-        <h4 className="text-[11px] uppercase tracking-wide text-gray-500">
-          โครงสร้างโฆษณา
+      <header className="flex items-center justify-between mb-3 pb-3 border-b" style={{ borderColor: 'var(--color-border-faint)' }}>
+        <h4 className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3 font-medium">
+          โครงสร้าง
         </h4>
-        <span className="text-[10px] text-gray-600">Hook · Body · CTA</span>
+        <span className="font-mono text-[10px] tracking-[0.08em] uppercase text-fg-4">
+          Hook · Body · CTA
+        </span>
       </header>
-      <dl className="space-y-3">
-        <Part label="Hook"
-              score={structure.hook_score}
-              critique={structure.hook_critique} />
-        <Part label="Body"
-              score={structure.body_score}
-              critique={structure.body_critique} />
-        <Part label="CTA"
-              score={structure.cta_score}
-              critique={structure.cta_critique} />
+      <dl className="space-y-0">
+        <Part label="Hook" score={structure.hook_score} critique={structure.hook_critique} />
+        <Part label="Body" score={structure.body_score} critique={structure.body_critique} />
+        <Part label="CTA"  score={structure.cta_score}  critique={structure.cta_critique} />
       </dl>
     </section>
   );
