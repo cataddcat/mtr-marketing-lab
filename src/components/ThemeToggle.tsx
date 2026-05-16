@@ -16,7 +16,7 @@ function readInitialTheme(): Theme {
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-export function useTheme() {
+function useTheme() {
   const [theme, setThemeState] = useState<Theme>(readInitialTheme);
 
   useEffect(() => {

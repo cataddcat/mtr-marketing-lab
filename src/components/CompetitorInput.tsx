@@ -33,7 +33,7 @@ export function CompetitorInput({ value, onChange }: Props) {
       <div className="flex items-center justify-between gap-2 mb-2">
         <label
           htmlFor={fieldId}
-          className="block font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3 inline-flex items-center gap-1.5"
+          className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3 inline-flex items-center gap-1.5"
         >
           <Swords className="w-3 h-3 text-fg-4" strokeWidth={1.5} aria-hidden="true" />
           Advanced · ad คู่แข่ง

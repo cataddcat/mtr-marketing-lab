@@ -132,6 +132,13 @@ export default function App() {
     setVisualErrors({});
     setRewrites({});
     setExpanded(null);
+    setEvalLoading(null);
+    setVisualLoading(null);
+    setCopiedIndex(null);
+    evalAbortsRef.current.forEach(c => c.abort());
+    evalAbortsRef.current.clear();
+    visualAbortsRef.current.forEach(c => c.abort());
+    visualAbortsRef.current.clear();
     rewriteAbortsRef.current.forEach(c => c.abort());
     rewriteAbortsRef.current.clear();
     setEnsembleLoading(null);
@@ -613,7 +620,7 @@ ${personaLines}
           <div className="grid gap-4 md:grid-cols-[1fr_1fr_1fr_220px] items-stretch">
             <div className="relative" data-dev-code="GEN.PRODUCT">
               <div className="flex items-center justify-between gap-2 mb-2">
-                <label htmlFor={productId} className="block font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3 inline-flex items-center gap-2">
+                <label htmlFor={productId} className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3 inline-flex items-center gap-2">
                   Product · สินค้า/บริการ
                   <SectionTag code="GEN.PRODUCT" />
                 </label>
@@ -636,7 +643,7 @@ ${personaLines}
             </div>
             <div className="relative" data-dev-code="GEN.PROMO">
               <div className="flex items-center justify-between gap-2 mb-2">
-                <label htmlFor={promoId} className="block font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3 inline-flex items-center gap-2">
+                <label htmlFor={promoId} className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3 inline-flex items-center gap-2">
                   Promo · จุดขาย/โปรโมชัน
                   <SectionTag code="GEN.PROMO" />
                 </label>
@@ -661,7 +668,7 @@ ${personaLines}
               <CompetitorInput value={competitorAd} onChange={setCompetitorAd} />
             </div>
             <div className="flex flex-col relative" data-dev-code="GEN.RUN">
-              <SectionTag code="GEN.RUN" />
+              <SectionTag code="GEN.RUN" floating />
               <span className="block mb-2 h-[15px]" aria-hidden="true">&nbsp;</span>
               <button
                 type="button"

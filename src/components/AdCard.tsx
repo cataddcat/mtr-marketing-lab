@@ -89,7 +89,6 @@ export function AdCard({
   const cls = scoreClass(score);
 
   const handleRowClick = () => onToggle(idx);
-  const stop = (e: React.MouseEvent) => e.stopPropagation();
 
   return (
     <article
@@ -101,46 +100,48 @@ export function AdCard({
         borderRadius: 'var(--radius-md)',
       }}
     >
-      {/* Collapsed row */}
-      <button
-        type="button"
-        onClick={handleRowClick}
-        aria-expanded={expanded}
-        aria-controls={bodyId}
-        className="w-full grid items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-bg-hover"
-        style={{ gridTemplateColumns: '40px 130px 1fr 200px auto', minHeight: 56 }}
-      >
-        <span className="font-mono text-[11px] tracking-[0.14em] text-fg-3">
-          0{idx + 1}
-        </span>
-        <span id={headingId} className="text-sm font-medium text-fg-1 truncate">
-          {ad.style}
-        </span>
-        <span className="text-[13px] text-fg-2 truncate" lang="th">
-          {ad.copy.split('\n')[0]}
-        </span>
-        <div className="flex items-center gap-2">
-          {score != null ? (
-            <>
-              <div className="flex-1"><ScoreBar value={score} size="thin" /></div>
-              <span
-                className="font-mono text-[12px] font-medium tabular-nums shrink-0"
-                style={{ color: scoreColorVar(cls) }}
-              >
-                {score.toFixed(1)}
+      {/* Collapsed row — disclosure button + action buttons as siblings (no button-in-button). */}
+      <div className="flex items-stretch">
+        <button
+          type="button"
+          onClick={handleRowClick}
+          aria-expanded={expanded}
+          aria-controls={bodyId}
+          className="flex-1 grid items-center gap-4 pl-4 pr-2 py-3 text-left transition-colors hover:bg-bg-hover"
+          style={{ gridTemplateColumns: '40px 130px 1fr 200px', minHeight: 56 }}
+        >
+          <span className="font-mono text-[11px] tracking-[0.14em] text-fg-3">
+            0{idx + 1}
+          </span>
+          <span id={headingId} className="text-sm font-medium text-fg-1 truncate">
+            {ad.style}
+          </span>
+          <span className="text-[13px] text-fg-2 truncate" lang="th">
+            {ad.copy.split('\n')[0]}
+          </span>
+          <div className="flex items-center gap-2">
+            {score != null ? (
+              <>
+                <div className="flex-1"><ScoreBar value={score} size="thin" /></div>
+                <span
+                  className="font-mono text-[12px] font-medium tabular-nums shrink-0"
+                  style={{ color: scoreColorVar(cls) }}
+                >
+                  {score.toFixed(1)}
+                </span>
+              </>
+            ) : (
+              <span className="font-mono text-[10.5px] tracking-[0.08em] uppercase text-fg-4">
+                Not scored
               </span>
-            </>
-          ) : (
-            <span className="font-mono text-[10.5px] tracking-[0.08em] uppercase text-fg-4">
-              Not scored
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-1 shrink-0" onClick={stop}>
+            )}
+          </div>
+        </button>
+        <div className="flex items-center gap-1 shrink-0 pr-3 pl-1">
           {!evaluation && (
             <button
               type="button"
-              onClick={(e) => { stop(e); onEvaluate(); }}
+              onClick={onEvaluate}
               disabled={evalLoading}
               aria-busy={evalLoading}
               className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 min-h-[32px] rounded-md border border-border text-fg-2 hover:text-fg-1 hover:bg-bg-hover transition-colors disabled:opacity-50"
@@ -155,7 +156,7 @@ export function AdCard({
           )}
           <button
             type="button"
-            onClick={(e) => { stop(e); onCopy(ad.copy, `copy-${idx}`); }}
+            onClick={() => onCopy(ad.copy, `copy-${idx}`)}
             aria-label="คัดลอกข้อความโฆษณา"
             title="Copy"
             className="inline-flex items-center justify-center min-h-[32px] min-w-[32px] rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors"
@@ -168,7 +169,7 @@ export function AdCard({
           </button>
           <button
             type="button"
-            onClick={(e) => { stop(e); onSave(); }}
+            onClick={onSave}
             aria-label="บันทึก ad"
             title="Save"
             className="inline-flex items-center justify-center min-h-[32px] min-w-[32px] rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors"
@@ -176,7 +177,7 @@ export function AdCard({
             <Bookmark className="w-4 h-4" strokeWidth={1.5} aria-hidden="true" />
           </button>
         </div>
-      </button>
+      </div>
 
       {/* Expanded body */}
       {expanded && (

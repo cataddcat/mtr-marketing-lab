@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Loader2, ImageIcon, RefreshCw, AlertCircle, Download, ChevronDown, ChevronUp } from 'lucide-react';
 import { generateImagePreview, ImageGenerationError } from '../services/image';
 
@@ -18,6 +18,7 @@ type State =
 export function ImagePreview({ prompt, downloadName }: Props) {
   const [state, setState] = useState<State>({ status: 'idle' });
   const [collapsed, setCollapsed] = useState(false);
+  const panelId = useId();
 
   const run = async () => {
     setCollapsed(false);
@@ -90,7 +91,6 @@ export function ImagePreview({ prompt, downloadName }: Props) {
     );
   }
 
-  const panelId = 'image-preview-panel';
   return (
     <div className="w-full space-y-2">
       <div
