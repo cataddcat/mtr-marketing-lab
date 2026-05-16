@@ -20,6 +20,10 @@ const PERSONA_ORDER: readonly PersonaId[] = [
   'genz',
 ];
 
+/**
+ * Body-only view (no outer card/header). Mount inside a <Sheet> — Sheet provides
+ * the title bar. Use `CustomerQuotesAddButton` as the Sheet headerAction.
+ */
 export function CustomerQuotesView({
   quotes,
   onUpdate,
@@ -37,33 +41,10 @@ export function CustomerQuotesView({
     quotes.filter(q => q.persona === pid && q.enabled && q.quote.trim().length > 0).length;
 
   return (
-    <div
-      className="rounded-lg border flex flex-col max-w-2xl mx-auto"
-      style={{
-        background: 'var(--color-bg-elevated)',
-        borderColor: 'var(--color-border)',
-      }}
-    >
-      <header
-        className="flex items-center justify-between gap-3 px-4 py-3 border-b"
-        style={{ borderColor: 'var(--color-border-faint)' }}
-      >
-        <div>
-          <h2 className="text-[15px] font-semibold text-fg-1" lang="th">เสียงลูกค้าจริง</h2>
-          <p className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3 mt-1" lang="th">
-            {enabledTotal} คำพูดที่กำลังใช้งาน
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => onAdd(activePersona)}
-          aria-label={`เพิ่มคำพูดของ ${PERSONA_LABELS[activePersona]}`}
-          className="inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-md text-sm text-fg-2 hover:text-accent hover:bg-bg-hover transition-colors border border-border-faint"
-        >
-          <Plus className="w-4 h-4" strokeWidth={1.5} aria-hidden="true" />
-          เพิ่ม
-        </button>
-      </header>
+    <div className="flex flex-col">
+      <div className="px-4 pt-3 pb-1 font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3" lang="th">
+        {enabledTotal} คำพูดที่กำลังใช้งาน
+      </div>
 
       <nav
         role="tablist"
@@ -200,5 +181,23 @@ export function CustomerQuotesView({
         )}
       </footer>
     </div>
+  );
+}
+
+interface AddButtonProps {
+  readonly activePersona?: PersonaId;
+  readonly onAdd: (persona: PersonaId) => void;
+}
+
+export function CustomerQuotesAddButton({ activePersona = 'family_man', onAdd }: AddButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={() => onAdd(activePersona)}
+      aria-label={`เพิ่มคำพูดของ ${PERSONA_LABELS[activePersona]}`}
+      className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-md text-fg-2 hover:text-accent hover:bg-bg-hover transition-colors"
+    >
+      <Plus className="w-5 h-5" strokeWidth={1.5} aria-hidden="true" />
+    </button>
   );
 }

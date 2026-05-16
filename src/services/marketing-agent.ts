@@ -25,6 +25,11 @@ import {
 } from '../lib/customer-quotes';
 import { buildTimeContextBlock } from '../lib/seasonal-context';
 import { buildNicheContextBlock, filterNicheTrends } from '../lib/niche-seeds';
+import {
+  formatCalibrationForPrompt,
+  hashCalibrationExamples,
+  type CalibrationExample,
+} from '../lib/calibration';
 
 export type { AdEvaluation, VisualPrompt, PersonaEval, PersonaId } from '../lib/schemas';
 export { personaAverage, PERSONA_LABELS } from '../lib/schemas';
@@ -254,10 +259,12 @@ const buildJudgePrompt = (
   brandFacts: readonly BrandFact[],
   competitor: string | null = null,
   customerQuotes: readonly CustomerQuote[] = [],
+  calibration: readonly CalibrationExample[] = [],
 ): string => {
   const trendsBlock = buildTrendsBlock(trends);
   const factsBlock = formatBrandFactsForPrompt(brandFacts);
   const quotesBlock = formatQuotesForPrompt(customerQuotes);
+  const calibrationBlock = formatCalibrationForPrompt(calibration);
   const timeBlock = buildTimeContextBlock();
   const nicheBlock = buildNicheContextBlock();
   const competitorBlock = buildCompetitorBlock(competitor);
@@ -362,7 +369,7 @@ reasoning = สั้น ๆ ว่าทำไมเลือก best (~80 ต�
     {"id": "genz",        "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."}
   ],
   "average_score": 0.0${competitorJsonField}
-}${timeBlock}${nicheBlock}${factsBlock}${quotesBlock}${competitorBlock}`;
+}${timeBlock}${nicheBlock}${factsBlock}${quotesBlock}${calibrationBlock}${competitorBlock}`;
 };
 
 export interface EvaluateAdOptions {
@@ -377,6 +384,11 @@ export interface EvaluateAdOptions {
   readonly competitorAd?: string;
   /** Real customer quotes to ground the Judge with actual voice references. */
   readonly customerQuotes?: readonly CustomerQuote[];
+  /**
+   * Past saved ads + their real outcomes — Judge sees these as few-shot
+   * priors so it can adjust scoring toward what actually works in the shop.
+   */
+  readonly calibration?: readonly CalibrationExample[];
 }
 
 const hashString = (s: string): string => {
@@ -393,8 +405,9 @@ export const evaluateAd = async (
   const trends = options.trends ?? null;
   const brandFacts = options.brandFacts ?? [];
   const customerQuotes = options.customerQuotes ?? [];
+  const calibration = options.calibration ?? [];
   const competitor = options.competitorAd?.trim() ? options.competitorAd.trim() : null;
-  const systemPrompt = buildJudgePrompt(trends, brandFacts, competitor, customerQuotes);
+  const systemPrompt = buildJudgePrompt(trends, brandFacts, competitor, customerQuotes, calibration);
 
   const userPrompt = `ประเมินโฆษณาต่อไปนี้:
 ข้อความ: ${ad.copy}
@@ -403,9 +416,10 @@ export const evaluateAd = async (
   const trendsDate = trends?.cached_at.slice(0, 10) ?? 'no-trends';
   const factsHash = hashBrandFacts(brandFacts);
   const quotesHash = hashQuotes(customerQuotes);
+  const calibHash = hashCalibrationExamples(calibration);
   const salt = options.cacheSalt ?? '';
   const compHash = competitor ? hashString(competitor) : '';
-  const cacheKeyData = `${ad.copy}\n${ad.visual_idea}\n${trendsDate}\n${factsHash}\n${quotesHash}\n${salt}\n${compHash}`;
+  const cacheKeyData = `${ad.copy}\n${ad.visual_idea}\n${trendsDate}\n${factsHash}\n${quotesHash}\n${calibHash}\n${salt}\n${compHash}`;
 
   try {
     return await generateAndExtract({
@@ -568,6 +582,7 @@ export interface EnsembleOptions {
   readonly brandFacts?: readonly BrandFact[];
   readonly competitorAd?: string;
   readonly customerQuotes?: readonly CustomerQuote[];
+  readonly calibration?: readonly CalibrationExample[];
   /** Extra runs to perform on top of the baseline (default 2 → 3 total). */
   readonly additionalRuns?: number;
 }
@@ -588,6 +603,7 @@ export const runEnsembleEval = async (
         brandFacts: options.brandFacts,
         competitorAd: options.competitorAd,
         customerQuotes: options.customerQuotes,
+        calibration: options.calibration,
         cacheSalt: salt,
       }),
     ),

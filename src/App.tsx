@@ -4,16 +4,17 @@ import type { AdIdea, AdEvaluation, VisualPrompt } from './services/marketing-ag
 import type { RewriteState } from './components/PersonaScoreCard';
 import type { PersonaId, ParsedAdIdea } from './lib/schemas';
 import { fetchTrends, type TrendsSnapshot } from './services/trends';
-import { Loader2, Target, Bookmark, MessageSquareQuote } from 'lucide-react';
+import { Loader2, Target, Bookmark, Settings, MessageSquareQuote } from 'lucide-react';
 import { InlineError } from './components/InlineError';
 import { useToast } from './components/toast-context';
 import { CompetitorInput } from './components/CompetitorInput';
 import { PerformancePanel } from './components/PerformancePanel';
 import { TranslatePanel } from './components/TranslatePanel';
 import { isPerformanceEmpty, type PerformanceMetrics } from './lib/performance';
-import { BrandFactsView } from './components/BrandFactsView';
+import { BrandFactsView, BrandFactsAddButton } from './components/BrandFactsView';
 import { BrandFactsBanner } from './components/BrandFactsBanner';
-import { CustomerQuotesView } from './components/CustomerQuotesView';
+import { CustomerQuotesView, CustomerQuotesAddButton } from './components/CustomerQuotesView';
+import { Sheet } from './components/Sheet';
 import { SectionTag } from './components/SectionTag';
 import { ExamplePicker } from './components/ExamplePicker';
 import { ThemeToggle } from './components/ThemeToggle';
@@ -24,6 +25,7 @@ import { useBrandFacts } from './hooks/useBrandFacts';
 import { useCustomerQuotes } from './hooks/useCustomerQuotes';
 import { PERSONA_LABELS } from './lib/schemas';
 import { PRODUCT_EXAMPLES, PROMO_EXAMPLES } from './lib/example-prompts';
+import { selectCalibrationExamples } from './lib/calibration';
 
 type Outcome = 'used-good' | 'used-bad';
 
@@ -44,8 +46,9 @@ export default function App() {
   const toast = useToast();
   const brandFactsApi = useBrandFacts();
   const customerQuotesApi = useCustomerQuotes();
-  const [activeTab, setActiveTab] = useState<'generator' | 'library' | 'brand-facts'>('generator');
-  const [librarySubTab, setLibrarySubTab] = useState<'saved' | 'quotes'>('saved');
+  const [activeTab, setActiveTab] = useState<'generator' | 'library'>('generator');
+  const [factsPanelOpen, setFactsPanelOpen] = useState(false);
+  const [quotesPanelOpen, setQuotesPanelOpen] = useState(false);
   const [performanceTarget, setPerformanceTarget] = useState<string | null>(null);
   const [translateTarget, setTranslateTarget] = useState<string | null>(null);
   const productId = useId();
@@ -194,6 +197,7 @@ export default function App() {
         brandFacts: brandFactsApi.facts,
         competitorAd,
         customerQuotes: customerQuotesApi.quotes,
+        calibration: calibrationExamples,
       });
       if (controller.signal.aborted) return;
       if (result) {
@@ -285,6 +289,7 @@ export default function App() {
         brandFacts: brandFactsApi.facts,
         competitorAd,
         customerQuotes: customerQuotesApi.quotes,
+        calibration: calibrationExamples,
       });
       if (controller.signal.aborted) return;
       if (result) {
@@ -498,6 +503,7 @@ ${personaLines}
 
   const activeBrandFacts = brandFactsApi.facts.filter(f => f.enabled).length;
   const activeQuotes = customerQuotesApi.quotes.filter(q => q.enabled && q.quote.trim().length > 0).length;
+  const calibrationExamples = selectCalibrationExamples(savedAds);
 
   return (
     <div className="min-h-screen">
@@ -548,30 +554,6 @@ ${personaLines}
                 </span>
               )}
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('brand-facts')}
-              aria-current={activeTab === 'brand-facts' ? 'page' : undefined}
-              className={
-                activeTab === 'brand-facts'
-                  ? 'px-3 py-1.5 text-sm rounded-md text-fg-1 bg-bg-hover font-medium inline-flex items-center gap-1.5'
-                  : 'px-3 py-1.5 text-sm rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors inline-flex items-center gap-1.5'
-              }
-            >
-              Brand facts
-              {activeBrandFacts > 0 && (
-                <span
-                  className="font-mono text-[10px] tabular-nums px-1.5 py-0.5 rounded-pill border"
-                  style={{
-                    background: 'var(--color-bg-sunken)',
-                    borderColor: 'var(--color-border-faint)',
-                    color: 'var(--color-fg-3)',
-                  }}
-                >
-                  {activeBrandFacts}
-                </span>
-              )}
-            </button>
             <a href="#" className="px-3 py-1.5 text-sm rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors">Trends</a>
             <a href="#" className="px-3 py-1.5 text-sm rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors">Settings</a>
           </nav>
@@ -588,14 +570,12 @@ ${personaLines}
         <div className="max-w-[1440px] mx-auto px-6 py-7 flex items-end justify-between gap-6 flex-wrap">
           <div>
             <div className="font-mono text-[10.5px] tracking-[0.16em] uppercase text-fg-3 mb-2">
-              Marketing Lab · {activeTab === 'library' ? 'Library' : activeTab === 'brand-facts' ? 'Brand facts' : 'Generator'}
+              Marketing Lab · {activeTab === 'library' ? 'Library' : 'Generator'}
             </div>
             <h1 className="font-display text-3xl md:text-4xl text-fg-1 leading-tight tracking-tight">
               {activeTab === 'library'
-                ? 'คลังข้อมูล'
-                : activeTab === 'brand-facts'
-                  ? 'ข้อมูลร้าน'
-                  : 'Brainstorm & analyze ad variations'}
+                ? 'คลังโฆษณาที่บันทึก'
+                : 'Brainstorm & analyze ad variations'}
             </h1>
           </div>
           <div className="flex items-center gap-4 text-[11px] text-fg-3 font-mono uppercase tracking-[0.12em]">
@@ -691,11 +671,53 @@ ${personaLines}
             </div>
           </div>
 
+          <div className="mt-3 flex items-center gap-2 flex-wrap" data-dev-code="GEN.CHIPS">
+            <SectionTag code="GEN.CHIPS" />
+            <button
+              type="button"
+              onClick={() => setFactsPanelOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-pill border border-border-faint text-fg-2 hover:text-fg-1 hover:bg-bg-hover transition-colors"
+              title="ข้อมูลร้าน — ใช้ตอนสร้างและประเมินโฆษณา"
+            >
+              <Settings className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+              Brand facts · <b className="text-fg-1 font-medium">{activeBrandFacts}</b>
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuotesPanelOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-pill border border-border-faint text-fg-2 hover:text-fg-1 hover:bg-bg-hover transition-colors"
+              title="เสียงลูกค้าจริง — Judge ใช้เป็น tone reference ตอนประเมิน"
+            >
+              <MessageSquareQuote className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+              Customer quotes · <b className="text-fg-1 font-medium">{activeQuotes}</b>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('library')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-pill border transition-colors"
+              style={calibrationExamples.length > 0
+                ? {
+                    color: 'var(--color-accent)',
+                    borderColor: 'color-mix(in oklch, var(--color-accent) 35%, transparent)',
+                    background: 'color-mix(in oklch, var(--color-accent) 8%, transparent)',
+                  }
+                : { color: 'var(--color-fg-3)', borderColor: 'var(--color-border-faint)' }}
+              title={
+                calibrationExamples.length > 0
+                  ? `Judge ใช้ ${calibrationExamples.length} ตัวอย่างจากคลังเพื่อปรับการให้คะแนน`
+                  : 'ยังไม่มีโฆษณาที่บันทึก + มีผลจริง — บันทึกผล/มาร์กผลใน Library เพื่อเปิดใช้'
+              }
+            >
+              <Target className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+              Calibration · <b className="font-medium">{calibrationExamples.length}</b>
+            </button>
+          </div>
+
           <div className="mt-3 relative" data-dev-code="GEN.BANNER">
             <SectionTag code="GEN.BANNER" floating />
             <BrandFactsBanner
               facts={brandFactsApi.facts}
-              onOpenPanel={() => setActiveTab('brand-facts')}
+              onOpenPanel={() => setFactsPanelOpen(true)}
             />
           </div>
         </div>
@@ -784,107 +806,80 @@ ${personaLines}
           )}
 
           {activeTab === 'library' && (
-            <div className="relative space-y-5" data-dev-code="LIB">
-              <SectionTag code="LIB" floating />
-              <nav
-                role="tablist"
-                aria-label="คลังข้อมูล"
-                className="relative flex gap-1 border-b"
-                style={{ borderColor: 'var(--color-border)' }}
-                data-dev-code="LIB.TABS"
+            savedAds.length > 0 ? (
+              <div className="relative" data-dev-code="LIB.SAVED">
+                <SectionTag code="LIB.SAVED" floating />
+                <SavedLibrary
+                  items={savedAds}
+                  headingId={savedHeadingId}
+                  onRemove={handleRemoveSaved}
+                  onToggleOutcome={handleToggleOutcome}
+                  onOpenPerformance={setPerformanceTarget}
+                  onOpenTranslate={setTranslateTarget}
+                  onExport={handleExportObsidian}
+                  onCopy={handleCopyRewrite}
+                />
+              </div>
+            ) : (
+              <div
+                role="status"
+                className="relative flex flex-col items-center justify-center border border-dashed border-border rounded-md p-12 text-fg-3 text-sm gap-3"
+                lang="th"
+                data-dev-code="LIB.EMPTY"
               >
-                <SubTabButton
-                  active={librarySubTab === 'saved'}
-                  onClick={() => setLibrarySubTab('saved')}
-                  icon={<Bookmark className="w-3.5 h-3.5" strokeWidth={1.5} aria-hidden="true" />}
-                  label="Saved ads"
-                  count={savedAds.length}
-                  devCode="LIB.SAVED"
-                />
-                <SubTabButton
-                  active={librarySubTab === 'quotes'}
-                  onClick={() => setLibrarySubTab('quotes')}
-                  icon={<MessageSquareQuote className="w-3.5 h-3.5" strokeWidth={1.5} aria-hidden="true" />}
-                  label="Customer quotes"
-                  count={activeQuotes}
-                  devCode="LIB.QUOTES"
-                />
-                <SectionTag code="LIB.TABS" className="ml-auto self-center mb-1.5" />
-              </nav>
-
-              {librarySubTab === 'saved' && (
-                savedAds.length > 0 ? (
-                  <div className="relative" data-dev-code="LIB.SAVED">
-                    <SectionTag code="LIB.SAVED" floating />
-                    <SavedLibrary
-                      items={savedAds}
-                      headingId={savedHeadingId}
-                      onRemove={handleRemoveSaved}
-                      onToggleOutcome={handleToggleOutcome}
-                      onOpenPerformance={setPerformanceTarget}
-                      onOpenTranslate={setTranslateTarget}
-                      onExport={handleExportObsidian}
-                      onCopy={handleCopyRewrite}
-                    />
-                  </div>
-                ) : (
-                  <div
-                    role="status"
-                    className="relative flex flex-col items-center justify-center border border-dashed border-border rounded-md p-12 text-fg-3 text-sm gap-3"
-                    lang="th"
-                    data-dev-code="LIB.SAVED.EMPTY"
-                  >
-                    <SectionTag code="LIB.SAVED.EMPTY" floating />
-                    <Bookmark className="w-8 h-8 text-fg-4" strokeWidth={1.5} aria-hidden="true" />
-                    <div className="text-center space-y-1.5">
-                      <p className="text-fg-2">ยังไม่มีโฆษณาที่บันทึก</p>
-                      <p className="text-fg-4 text-[12.5px]">
-                        ไปที่แท็บ
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('generator')}
-                          className="mx-1 underline-offset-2 hover:underline text-fg-1 font-medium"
-                        >
-                          Generator
-                        </button>
-                        เพื่อสร้างและบันทึกโฆษณาใหม่
-                      </p>
-                    </div>
-                  </div>
-                )
-              )}
-
-              {librarySubTab === 'quotes' && (
-                <div className="relative" data-dev-code="LIB.QUOTES">
-                  <SectionTag code="LIB.QUOTES" floating />
-                  <CustomerQuotesView
-                    quotes={customerQuotesApi.quotes}
-                    onUpdate={customerQuotesApi.update}
-                    onAdd={customerQuotesApi.add}
-                    onRemove={customerQuotesApi.remove}
-                    onResetAll={customerQuotesApi.resetAll}
-                    onResetField={customerQuotesApi.resetField}
-                  />
+                <SectionTag code="LIB.EMPTY" floating />
+                <Bookmark className="w-8 h-8 text-fg-4" strokeWidth={1.5} aria-hidden="true" />
+                <div className="text-center space-y-1.5">
+                  <p className="text-fg-2">ยังไม่มีโฆษณาที่บันทึก</p>
+                  <p className="text-fg-4 text-[12.5px]">
+                    ไปที่แท็บ
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('generator')}
+                      className="mx-1 underline-offset-2 hover:underline text-fg-1 font-medium"
+                    >
+                      Generator
+                    </button>
+                    เพื่อสร้างและบันทึกโฆษณาใหม่
+                  </p>
                 </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'brand-facts' && (
-            <div className="relative" data-dev-code="BF">
-              <SectionTag code="BF" floating />
-              <BrandFactsView
-                facts={brandFactsApi.facts}
-                onUpdate={brandFactsApi.update}
-                onAdd={brandFactsApi.add}
-                onRemove={brandFactsApi.remove}
-                onResetAll={brandFactsApi.resetAll}
-                onResetField={brandFactsApi.resetField}
-              />
-            </div>
+              </div>
+            )
           )}
         </div>
       </main>
+
+      <Sheet
+        open={factsPanelOpen}
+        onClose={() => setFactsPanelOpen(false)}
+        title="ข้อมูลร้าน"
+        headerAction={<BrandFactsAddButton onAdd={brandFactsApi.add} />}
+      >
+        <BrandFactsView
+          facts={brandFactsApi.facts}
+          onUpdate={brandFactsApi.update}
+          onRemove={brandFactsApi.remove}
+          onResetAll={brandFactsApi.resetAll}
+          onResetField={brandFactsApi.resetField}
+        />
+      </Sheet>
+
+      <Sheet
+        open={quotesPanelOpen}
+        onClose={() => setQuotesPanelOpen(false)}
+        title="เสียงลูกค้าจริง"
+        headerAction={<CustomerQuotesAddButton onAdd={customerQuotesApi.add} />}
+      >
+        <CustomerQuotesView
+          quotes={customerQuotesApi.quotes}
+          onUpdate={customerQuotesApi.update}
+          onAdd={customerQuotesApi.add}
+          onRemove={customerQuotesApi.remove}
+          onResetAll={customerQuotesApi.resetAll}
+          onResetField={customerQuotesApi.resetField}
+        />
+      </Sheet>
+
       {(() => {
         const target = performanceTarget ? savedAds.find(a => a.id === performanceTarget) : null;
         return (
@@ -915,44 +910,3 @@ ${personaLines}
   );
 }
 
-interface SubTabButtonProps {
-  readonly active: boolean;
-  readonly onClick: () => void;
-  readonly icon: React.ReactNode;
-  readonly label: string;
-  readonly count: number;
-  readonly devCode?: string;
-}
-
-function SubTabButton({ active, onClick, icon, label, count, devCode }: SubTabButtonProps) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      data-dev-code={devCode}
-      className="inline-flex items-center gap-1.5 px-3 py-2 text-sm transition-colors -mb-px border-b-2"
-      style={active
-        ? { color: 'var(--color-accent)', borderBottomColor: 'var(--color-accent)' }
-        : { color: 'var(--color-fg-3)', borderBottomColor: 'transparent' }
-      }
-    >
-      {icon}
-      {label}
-      {count > 0 && (
-        <span
-          className="font-mono text-[10px] tabular-nums px-1.5 py-0.5 rounded-pill border"
-          style={{
-            background: 'var(--color-bg-sunken)',
-            borderColor: 'var(--color-border-faint)',
-            color: active ? 'var(--color-accent)' : 'var(--color-fg-3)',
-          }}
-        >
-          {count}
-        </span>
-      )}
-      {devCode && <SectionTag code={devCode} className="ml-1 opacity-70" />}
-    </button>
-  );
-}
