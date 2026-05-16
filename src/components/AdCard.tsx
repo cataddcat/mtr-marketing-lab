@@ -246,19 +246,21 @@ export function AdCard({
                   borderColor: 'var(--color-border-faint)',
                 }}
               >
-                <PromptBlock
-                  label="🎨 AI image prompt (Midjourney/DALL-E)"
-                  toneAccent
-                  text={visualPrompt.ai_prompt}
-                  copied={copiedIndex === `ai-${idx}`}
-                  onCopy={() => onCopy(visualPrompt.ai_prompt, `ai-${idx}`)}
-                />
-                <PromptBlock
-                  label="🔍 Canva search keywords"
-                  text={visualPrompt.canva_keywords}
-                  copied={copiedIndex === `canva-${idx}`}
-                  onCopy={() => onCopy(visualPrompt.canva_keywords, `canva-${idx}`)}
-                />
+                <div className="grid gap-3 md:grid-cols-2 items-start">
+                  <PromptBlock
+                    label="🎨 AI image prompt (Midjourney/DALL-E)"
+                    toneAccent
+                    text={visualPrompt.ai_prompt}
+                    copied={copiedIndex === `ai-${idx}`}
+                    onCopy={() => onCopy(visualPrompt.ai_prompt, `ai-${idx}`)}
+                  />
+                  <PromptBlock
+                    label="🔍 Canva search keywords"
+                    text={visualPrompt.canva_keywords}
+                    copied={copiedIndex === `canva-${idx}`}
+                    onCopy={() => onCopy(visualPrompt.canva_keywords, `canva-${idx}`)}
+                  />
+                </div>
                 <ImagePreview
                   prompt={visualPrompt.ai_prompt}
                   downloadName={`mtr-preview-${ad.style.replace(/\s+/g, '-')}.png`}

@@ -14,14 +14,17 @@ export function CompetitorInput({ value, onChange }: Props) {
 
   if (!expanded) {
     return (
-      <button
-        type="button"
-        onClick={() => setExpanded(true)}
-        className="w-full text-sm text-fg-3 hover:text-accent py-2 min-h-[40px] rounded-md inline-flex items-center justify-center gap-2 transition-colors border border-dashed border-border hover:bg-bg-hover"
-      >
-        <Plus className="w-4 h-4" strokeWidth={1.5} aria-hidden="true" />
-        Advanced · เพิ่ม ad คู่แข่งเพื่อเปรียบเทียบ
-      </button>
+      <div className="flex flex-col">
+        <span className="block mb-2 h-[15px]" aria-hidden="true">&nbsp;</span>
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="flex-1 min-h-[64px] rounded-md inline-flex items-center justify-center gap-2 text-sm text-fg-3 hover:text-accent transition-colors border border-dashed border-border hover:bg-bg-hover"
+        >
+          <Plus className="w-4 h-4" strokeWidth={1.5} aria-hidden="true" />
+          <span lang="th">Advanced · เพิ่ม ad คู่แข่ง</span>
+        </button>
+      </div>
     );
   }
 
@@ -33,7 +36,7 @@ export function CompetitorInput({ value, onChange }: Props) {
           className="block font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3 inline-flex items-center gap-1.5"
         >
           <Swords className="w-3 h-3 text-fg-4" strokeWidth={1.5} aria-hidden="true" />
-          Ad คู่แข่ง <span className="text-fg-4 normal-case tracking-normal">(optional)</span>
+          Advanced · ad คู่แข่ง
         </label>
         <div className="flex items-center gap-1">
           <ExamplePicker
@@ -48,12 +51,13 @@ export function CompetitorInput({ value, onChange }: Props) {
               setExpanded(false);
             }}
             aria-label="ลบ ad คู่แข่ง"
-            className="inline-flex items-center justify-center min-w-[32px] min-h-[32px] text-fg-3 hover:bg-bg-hover rounded-md transition-colors"
+            title="ลบและย่อกลับ"
+            className="inline-flex items-center justify-center min-w-[24px] min-h-[24px] text-fg-3 hover:bg-bg-hover rounded-md transition-colors"
             style={{ color: 'var(--color-fg-3)' }}
             onMouseOver={(e) => { e.currentTarget.style.color = 'var(--color-danger)'; }}
             onMouseOut={(e) => { e.currentTarget.style.color = 'var(--color-fg-3)'; }}
           >
-            <X className="w-4 h-4" strokeWidth={1.5} aria-hidden="true" />
+            <X className="w-3.5 h-3.5" strokeWidth={1.5} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -61,16 +65,11 @@ export function CompetitorInput({ value, onChange }: Props) {
         id={fieldId}
         value={value}
         onChange={e => onChange(e.target.value)}
-        rows={3}
-        placeholder="วาง ad ของคู่แข่งที่นี่ — Judge จะเปรียบเทียบกับ ad ที่เรา generate"
+        rows={2}
+        placeholder="วาง ad คู่แข่ง — Judge จะเปรียบเทียบให้"
         lang="th"
-        className="w-full min-h-[80px] resize-y rounded-md border border-border bg-bg px-3 py-2 text-sm leading-relaxed text-fg-1 placeholder:text-fg-4 transition-colors hover:border-border-strong focus:border-accent"
+        className="w-full min-h-[64px] resize-none rounded-md border border-border bg-bg px-3 py-2 text-sm leading-relaxed text-fg-1 placeholder:text-fg-4 transition-colors hover:border-border-strong focus:border-accent"
       />
-      <p className="text-[11px] text-fg-3 mt-1.5 leading-relaxed" lang="th">
-        เปิดใช้แล้ว — ทุกครั้งที่กด "ประเมินความโดนใจ" ระบบจะ output{' '}
-        <span style={{ color: 'var(--color-accent)' }}>เปรียบเทียบกับคู่แข่ง</span>{' '}
-        ในแผงผลด้วย
-      </p>
     </div>
   );
 }
