@@ -14,8 +14,7 @@ export function SummaryStrip({ ads, evaluations }: Props) {
     <div
       role="list"
       aria-label="Variations at a glance"
-      className="grid gap-3 mb-5"
-      style={{ gridTemplateColumns: `repeat(${Math.min(ads.length, 3)}, minmax(0, 1fr))` }}
+      className="grid gap-3 mb-5 grid-cols-1 md:grid-cols-2"
     >
       {ads.map((ad, i) => {
         const s = evaluations[i]?.average_score;

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { AdIdea, VisualPrompt } from '../services/marketing-agent';
 import type { AdEvaluation, PersonaId } from '../lib/schemas';
+import { PERSONA_LABELS, personaAverage } from '../lib/schemas';
 import type { RewriteState } from './PersonaScoreCard';
 import { InlineError } from './InlineError';
 import { EnsembleBadge } from './EnsembleBadge';
@@ -21,6 +22,7 @@ import { ChannelFitPanel } from './ChannelFitPanel';
 import { CompetitorPanel } from './CompetitorPanel';
 import { ImagePreview } from './ImagePreview';
 import { Gauge } from './Gauge';
+import { Radar } from './Radar';
 import { ScoreBar } from './ScoreBar';
 import { scoreClass, scoreLabel, scoreColorVar, scoreBgVar } from '../lib/score';
 
@@ -367,6 +369,19 @@ export function AdCard({
                       </button>
                     </div>
                   )}
+                  <div
+                    className="mt-3 pt-3 w-full border-t flex flex-col items-center gap-2"
+                    style={{ borderColor: 'var(--color-border-faint)' }}
+                  >
+                    <p className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3 self-start">
+                      Persona radar
+                    </p>
+                    <Radar
+                      values={evaluation.personas.map(personaAverage)}
+                      labels={evaluation.personas.map(p => ({ name: PERSONA_LABELS[p.id] }))}
+                      size={220}
+                    />
+                  </div>
                 </div>
 
                 {/* Right column: structure + channel + personas + competitor */}

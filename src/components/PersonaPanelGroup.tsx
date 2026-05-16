@@ -1,8 +1,7 @@
 import { useCallback, useState } from 'react';
 import { ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import { PersonaScoreCard, type RewriteState } from './PersonaScoreCard';
-import { Radar } from './Radar';
-import { PERSONA_LABELS, personaAverage, type PersonaEval, type PersonaId } from '../lib/schemas';
+import type { PersonaEval, PersonaId } from '../lib/schemas';
 
 interface Props {
   readonly personas: readonly PersonaEval[];
@@ -19,9 +18,6 @@ export function PersonaPanelGroup({
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const toggle = useCallback(() => setExpanded(v => !v), []);
-
-  const radarValues = personas.map(personaAverage);
-  const radarLabels = personas.map(p => ({ name: PERSONA_LABELS[p.id] }));
 
   return (
     <section
@@ -58,10 +54,6 @@ export function PersonaPanelGroup({
           )}
         </button>
       </header>
-
-      <div className="flex justify-center py-2">
-        <Radar values={radarValues} labels={radarLabels} size={240} />
-      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {personas.map(p => (
