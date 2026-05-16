@@ -30,6 +30,14 @@ import {
   hashCalibrationExamples,
   type CalibrationExample,
 } from '../lib/calibration';
+import {
+  formatStrategyForGeneration,
+  formatStrategyForEvaluation,
+  formatStrategyForRewrite,
+  hashStrategyBrief,
+  isBriefUsable,
+  type StrategyBrief,
+} from '../lib/strategy-brief';
 
 export type { AdEvaluation, VisualPrompt, PersonaEval, PersonaId } from '../lib/schemas';
 export { personaAverage, PERSONA_LABELS } from '../lib/schemas';
@@ -115,6 +123,7 @@ const judgeCallerFor = (cacheKeyData: string): Caller =>
 
 export interface GenerateAdsOptions {
   readonly brandFacts?: readonly BrandFact[];
+  readonly strategyBrief?: StrategyBrief | null;
 }
 
 export const generateAds = async (
@@ -124,6 +133,9 @@ export const generateAds = async (
   options: GenerateAdsOptions = {},
 ): Promise<AdIdea[]> => {
   const factsBlock = formatBrandFactsForPrompt(options.brandFacts ?? []);
+  const briefBlock = isBriefUsable(options.strategyBrief ?? null)
+    ? formatStrategyForGeneration(options.strategyBrief ?? null)
+    : '';
   const timeBlock = buildTimeContextBlock();
   const nicheBlock = buildNicheContextBlock();
   const systemPrompt = `คุณคือผู้เชี่ยวชาญการตลาด Facebook + TikTok ในไทย ทำงานให้ธุรกิจ "ม่านธารา" (หน้าร้านอยู่ท่าศาลา ลพบุรี)
@@ -153,7 +165,7 @@ export const generateAds = async (
   {"style": "พรีเมียม", "copy": "...", "visual_idea": "..."},
   {"style": "สั้นกระชับ", "copy": "...", "visual_idea": "..."},
   {"style": "GenZ-coded", "copy": "...", "visual_idea": "..."}
-]${timeBlock}${nicheBlock}${factsBlock}`;
+]${timeBlock}${nicheBlock}${factsBlock}${briefBlock}`;
 
   const userPrompt = `สินค้า/บริการที่จะโปรโมท: ${productInfo}\nโปรโมชันหรือจุดเด่น: ${promotion}`;
 
@@ -260,6 +272,7 @@ const buildJudgePrompt = (
   competitor: string | null = null,
   customerQuotes: readonly CustomerQuote[] = [],
   calibration: readonly CalibrationExample[] = [],
+  strategyBrief: StrategyBrief | null = null,
 ): string => {
   const trendsBlock = buildTrendsBlock(trends);
   const factsBlock = formatBrandFactsForPrompt(brandFacts);
@@ -268,6 +281,9 @@ const buildJudgePrompt = (
   const timeBlock = buildTimeContextBlock();
   const nicheBlock = buildNicheContextBlock();
   const competitorBlock = buildCompetitorBlock(competitor);
+  const briefBlock = isBriefUsable(strategyBrief)
+    ? formatStrategyForEvaluation(strategyBrief)
+    : '';
   const competitorJsonField = competitor
     ? `,\n  "competitor": {"winner": "ours|theirs|tie", "margin": 0, "ours_strengths": ["..."], "theirs_strengths": ["..."], "recommendation": "..."}`
     : '';
@@ -369,7 +385,7 @@ reasoning = สั้น ๆ ว่าทำไมเลือก best (~80 ต�
     {"id": "genz",        "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."}
   ],
   "average_score": 0.0${competitorJsonField}
-}${timeBlock}${nicheBlock}${factsBlock}${quotesBlock}${calibrationBlock}${competitorBlock}`;
+}${timeBlock}${nicheBlock}${factsBlock}${quotesBlock}${calibrationBlock}${competitorBlock}${briefBlock}`;
 };
 
 export interface EvaluateAdOptions {
@@ -389,6 +405,8 @@ export interface EvaluateAdOptions {
    * priors so it can adjust scoring toward what actually works in the shop.
    */
   readonly calibration?: readonly CalibrationExample[];
+  /** Strategy Brief — positioning, segments, competitors, benchmarks. */
+  readonly strategyBrief?: StrategyBrief | null;
 }
 
 const hashString = (s: string): string => {
@@ -406,8 +424,16 @@ export const evaluateAd = async (
   const brandFacts = options.brandFacts ?? [];
   const customerQuotes = options.customerQuotes ?? [];
   const calibration = options.calibration ?? [];
+  const strategyBrief = options.strategyBrief ?? null;
   const competitor = options.competitorAd?.trim() ? options.competitorAd.trim() : null;
-  const systemPrompt = buildJudgePrompt(trends, brandFacts, competitor, customerQuotes, calibration);
+  const systemPrompt = buildJudgePrompt(
+    trends,
+    brandFacts,
+    competitor,
+    customerQuotes,
+    calibration,
+    strategyBrief,
+  );
 
   const userPrompt = `ประเมินโฆษณาต่อไปนี้:
 ข้อความ: ${ad.copy}
@@ -417,9 +443,10 @@ export const evaluateAd = async (
   const factsHash = hashBrandFacts(brandFacts);
   const quotesHash = hashQuotes(customerQuotes);
   const calibHash = hashCalibrationExamples(calibration);
+  const briefHash = hashStrategyBrief(strategyBrief);
   const salt = options.cacheSalt ?? '';
   const compHash = competitor ? hashString(competitor) : '';
-  const cacheKeyData = `${ad.copy}\n${ad.visual_idea}\n${trendsDate}\n${factsHash}\n${quotesHash}\n${calibHash}\n${salt}\n${compHash}`;
+  const cacheKeyData = `${ad.copy}\n${ad.visual_idea}\n${trendsDate}\n${factsHash}\n${quotesHash}\n${calibHash}\n${briefHash}\n${salt}\n${compHash}`;
 
   try {
     return await generateAndExtract({
@@ -583,6 +610,7 @@ export interface EnsembleOptions {
   readonly competitorAd?: string;
   readonly customerQuotes?: readonly CustomerQuote[];
   readonly calibration?: readonly CalibrationExample[];
+  readonly strategyBrief?: StrategyBrief | null;
   /** Extra runs to perform on top of the baseline (default 2 → 3 total). */
   readonly additionalRuns?: number;
 }
@@ -604,6 +632,7 @@ export const runEnsembleEval = async (
         competitorAd: options.competitorAd,
         customerQuotes: options.customerQuotes,
         calibration: options.calibration,
+        strategyBrief: options.strategyBrief,
         cacheSalt: salt,
       }),
     ),
@@ -624,6 +653,7 @@ export const runEnsembleEval = async (
 
 export interface RewriteAdOptions {
   readonly brandFacts?: readonly BrandFact[];
+  readonly strategyBrief?: StrategyBrief | null;
 }
 
 export const rewriteAd = async (
@@ -633,6 +663,9 @@ export const rewriteAd = async (
   options: RewriteAdOptions = {},
 ): Promise<ParsedAdIdea | null> => {
   const factsBlock = formatBrandFactsForPrompt(options.brandFacts ?? []);
+  const briefBlock = isBriefUsable(options.strategyBrief ?? null)
+    ? formatStrategyForRewrite(options.strategyBrief ?? null, persona.id)
+    : '';
   const timeBlock = buildTimeContextBlock();
   const personaLabel = PERSONA_LABELS[persona.id];
 
@@ -642,7 +675,7 @@ export const rewriteAd = async (
 - ปรับ copy + visual_idea ตาม suggestion โดยตรง
 - ห้ามเพิ่มข้อมูลที่ไม่มีใน BRAND_FACTS / context
 - ความยาวใกล้เคียง ad เดิม
-${timeBlock}${factsBlock}
+${timeBlock}${factsBlock}${briefBlock}
 บังคับตอบเป็น JSON object รูปแบบนี้เท่านั้น ห้ามมีข้อความอื่นผสม:
 {"style": "${ad.style}", "copy": "...", "visual_idea": "..."}`;
 

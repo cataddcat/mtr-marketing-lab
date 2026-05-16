@@ -4,7 +4,7 @@ import type { AdIdea, AdEvaluation, VisualPrompt } from './services/marketing-ag
 import type { RewriteState } from './components/PersonaScoreCard';
 import type { PersonaId, ParsedAdIdea } from './lib/schemas';
 import { fetchTrends, type TrendsSnapshot } from './services/trends';
-import { Loader2, Target, Bookmark, Settings, MessageSquareQuote } from 'lucide-react';
+import { Loader2, Target, Bookmark, Settings, MessageSquareQuote, Sparkles } from 'lucide-react';
 import { InlineError } from './components/InlineError';
 import { useToast } from './components/toast-context';
 import { CompetitorInput } from './components/CompetitorInput';
@@ -14,6 +14,8 @@ import { isPerformanceEmpty, type PerformanceMetrics } from './lib/performance';
 import { BrandFactsView, BrandFactsAddButton } from './components/BrandFactsView';
 import { BrandFactsBanner } from './components/BrandFactsBanner';
 import { CustomerQuotesView, CustomerQuotesAddButton } from './components/CustomerQuotesView';
+import { StrategyBriefView, StrategyBriefHeaderAction } from './components/StrategyBriefView';
+import { StrategyBriefBanner } from './components/StrategyBriefBanner';
 import { Sheet } from './components/Sheet';
 import { SectionTag } from './components/SectionTag';
 import { ExamplePicker } from './components/ExamplePicker';
@@ -23,6 +25,7 @@ import { SummaryStrip } from './components/SummaryStrip';
 import { SavedLibrary } from './components/SavedLibrary';
 import { useBrandFacts } from './hooks/useBrandFacts';
 import { useCustomerQuotes } from './hooks/useCustomerQuotes';
+import { useStrategyBrief } from './hooks/useStrategyBrief';
 import { PERSONA_LABELS } from './lib/schemas';
 import { PRODUCT_EXAMPLES, PROMO_EXAMPLES } from './lib/example-prompts';
 import { selectCalibrationExamples } from './lib/calibration';
@@ -49,6 +52,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'generator' | 'library'>('generator');
   const [factsPanelOpen, setFactsPanelOpen] = useState(false);
   const [quotesPanelOpen, setQuotesPanelOpen] = useState(false);
+  const [briefPanelOpen, setBriefPanelOpen] = useState(false);
   const [quotesActivePersona, setQuotesActivePersona] = useState<PersonaId>('family_man');
   const [performanceTarget, setPerformanceTarget] = useState<string | null>(null);
   const [translateTarget, setTranslateTarget] = useState<string | null>(null);
@@ -58,6 +62,7 @@ export default function App() {
   const resultsHeadingId = useId();
   const [product, setProduct] = useState('');
   const [promo, setPromo] = useState('');
+  const strategyBriefApi = useStrategyBrief({ product, promo, brandFacts: brandFactsApi.facts });
   const [competitorAd, setCompetitorAd] = useState('');
   const [ads, setAds] = useState<AdIdea[]>([]);
   const [loading, setLoading] = useState(false);
@@ -151,7 +156,10 @@ export default function App() {
     ensembleAbortsRef.current.clear();
     try {
       const [results, trends] = await Promise.all([
-        generateAds(product, promo, controller.signal, { brandFacts: brandFactsApi.facts }),
+        generateAds(product, promo, controller.signal, {
+          brandFacts: brandFactsApi.facts,
+          strategyBrief: strategyBriefApi.current,
+        }),
         fetchTrends(product, controller.signal),
       ]);
       if (controller.signal.aborted) return;
@@ -199,6 +207,7 @@ export default function App() {
         competitorAd,
         customerQuotes: customerQuotesApi.quotes,
         calibration: calibrationExamples,
+        strategyBrief: strategyBriefApi.current,
       });
       if (controller.signal.aborted) return;
       if (result) {
@@ -291,6 +300,7 @@ export default function App() {
         competitorAd,
         customerQuotes: customerQuotesApi.quotes,
         calibration: calibrationExamples,
+        strategyBrief: strategyBriefApi.current,
       });
       if (controller.signal.aborted) return;
       if (result) {
@@ -328,6 +338,7 @@ export default function App() {
     try {
       const result: ParsedAdIdea | null = await rewriteAd(ad, persona, controller.signal, {
         brandFacts: brandFactsApi.facts,
+        strategyBrief: strategyBriefApi.current,
       });
       if (controller.signal.aborted) return;
       if (result) {
@@ -676,6 +687,44 @@ ${personaLines}
             <SectionTag code="GEN.CHIPS" />
             <button
               type="button"
+              onClick={() => setBriefPanelOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-pill border transition-colors"
+              style={
+                strategyBriefApi.current
+                  ? {
+                      background: 'color-mix(in oklch, var(--color-accent) 10%, transparent)',
+                      borderColor: 'color-mix(in oklch, var(--color-accent) 35%, transparent)',
+                      color: 'var(--color-accent)',
+                    }
+                  : strategyBriefApi.isStale
+                    ? {
+                        background: 'var(--color-warning-bg)',
+                        borderColor: 'color-mix(in oklch, var(--color-warning) 35%, transparent)',
+                        color: 'var(--color-warning)',
+                      }
+                    : { color: 'var(--color-fg-2)', borderColor: 'var(--color-border-faint)' }
+              }
+              title={
+                strategyBriefApi.current
+                  ? 'Strategy Brief พร้อมใช้ — AI จะอ้างถึงตอนสร้าง+ประเมิน'
+                  : strategyBriefApi.isStale
+                    ? 'Product/Promo เปลี่ยน — Brief ยังไม่ตรง'
+                    : 'ร่าง brief ของแคมเปญนี้ก่อน Generate'
+              }
+            >
+              {strategyBriefApi.loading ? (
+                <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.5} aria-hidden="true" />
+              ) : (
+                <Sparkles className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+              )}
+              Strategy brief
+              {strategyBriefApi.current && (
+                <b className="font-medium">· {strategyBriefApi.current.segments.length} seg</b>
+              )}
+              {!strategyBriefApi.current && strategyBriefApi.isStale && <b className="font-medium">· stale</b>}
+            </button>
+            <button
+              type="button"
               onClick={() => setFactsPanelOpen(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-pill border border-border-faint text-fg-2 hover:text-fg-1 hover:bg-bg-hover transition-colors"
               title="ข้อมูลร้าน — ใช้ตอนสร้างและประเมินโฆษณา"
@@ -714,11 +763,17 @@ ${personaLines}
             </button>
           </div>
 
-          <div className="mt-3 relative" data-dev-code="GEN.BANNER">
+          <div className="mt-3 relative space-y-2" data-dev-code="GEN.BANNER">
             <SectionTag code="GEN.BANNER" floating />
             <BrandFactsBanner
               facts={brandFactsApi.facts}
               onOpenPanel={() => setFactsPanelOpen(true)}
+            />
+            <StrategyBriefBanner
+              brief={strategyBriefApi.current}
+              isStale={strategyBriefApi.isStale}
+              canDraft={product.trim().length > 0}
+              onOpenPanel={() => setBriefPanelOpen(true)}
             />
           </div>
         </div>
@@ -862,6 +917,33 @@ ${personaLines}
           onRemove={brandFactsApi.remove}
           onResetAll={brandFactsApi.resetAll}
           onResetField={brandFactsApi.resetField}
+        />
+      </Sheet>
+
+      <Sheet
+        open={briefPanelOpen}
+        onClose={() => setBriefPanelOpen(false)}
+        title="Strategy Brief"
+        headerAction={
+          <StrategyBriefHeaderAction
+            hasBrief={strategyBriefApi.current !== null}
+            loading={strategyBriefApi.loading}
+            canDraft={product.trim().length > 0}
+            onGenerate={strategyBriefApi.generate}
+            onRegenerate={strategyBriefApi.regenerate}
+          />
+        }
+      >
+        <StrategyBriefView
+          brief={strategyBriefApi.current}
+          loading={strategyBriefApi.loading}
+          error={strategyBriefApi.error}
+          isStale={strategyBriefApi.isStale}
+          product={product}
+          onGenerate={strategyBriefApi.generate}
+          onRegenerate={strategyBriefApi.regenerate}
+          onUpdate={strategyBriefApi.update}
+          onClear={strategyBriefApi.clearCurrent}
         />
       </Sheet>
 
