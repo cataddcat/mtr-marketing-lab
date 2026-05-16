@@ -1,31 +1,198 @@
 @import "tailwindcss";
 
+/* ===========================================================================
+   Marnthara Design System · Tailwind v4 theme
+   Drop-in for: src/styles/app.css  (replaces the previous :root block).
+
+   Use:
+     @import 'tailwindcss';
+
+   Tokens defined here become Tailwind utilities automatically:
+     bg-bg-elevated · text-fg-1 · border-border · ring-accent
+     rounded-md · gap-4 · text-h2 · etc.
+
+   Dark mode is toggled by setting data-theme="dark" on <html>.
+   ============================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap');
+
 @theme {
-  --color-hermes: #F37021;
-  --color-dark: #121212;
-  --color-panel: #1E1E1E;
-  --color-panel-2: #2A2A2A;
-  --shadow-card:
-    0 10px 15px -3px rgba(0, 0, 0, 0.5),
-    0 4px 6px -2px rgba(0, 0, 0, 0.35);
+  /* ===== type ===== */
+  --font-display: "Instrument Serif", "Cormorant Garamond", Georgia, serif;
+  --font-sans:    "Geist", "IBM Plex Sans Thai", -apple-system, "Segoe UI", system-ui, sans-serif;
+  --font-thai:    "IBM Plex Sans Thai", "Geist", system-ui, sans-serif;
+  --font-mono:    "Geist Mono", "JetBrains Mono", ui-monospace, Consolas, monospace;
+
+  --text-display-xl: clamp(56px, 7vw, 96px);
+  --text-display-l:  clamp(40px, 5vw, 64px);
+  --text-display-m:  clamp(32px, 4vw, 48px);
+  --text-h1:         clamp(28px, 3.2vw, 40px);
+  --text-h2:         28px;
+  --text-h3:         22px;
+  --text-h4:         18px;
+  --text-body-l:     18px;
+  --text-body:       16px;
+  --text-body-s:     14px;
+  --text-caption:    12px;
+  --text-overline:   11px;
+
+  /* ===== spacing (4-base) ===== */
+  --spacing: 4px;
+
+  /* ===== radii ===== */
+  --radius-xs:   2px;
+  --radius-sm:   4px;
+  --radius-md:   6px;
+  --radius-lg:   10px;
+  --radius-xl:   16px;
+  --radius-2xl:  24px;
+  --radius-pill: 9999px;
+
+  /* ===== motion ===== */
+  --ease-out:    cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* ===== light theme colors (default) ===== */
+  --color-bg:           #FAF7F2;
+  --color-bg-elevated:  #FFFFFF;
+  --color-bg-sunken:    #F5EFE6;
+  --color-bg-hover:     #EFE9DE;
+  --color-paper:        #FFFFFF;
+
+  --color-fg-1: #1A1714;
+  --color-fg-2: #4A4239;
+  --color-fg-3: #6F6862;
+  --color-fg-4: #A89E92;
+
+  --color-border:        #E5DED2;
+  --color-border-faint:  #EFE9DE;
+  --color-border-strong: #1A1714;
+
+  /* terracotta accent */
+  --color-accent:       #B8553A;
+  --color-accent-hover: #8E3E27;
+  --color-accent-tint:  #F6E2D9;
+  --color-accent-fg:    #FFFFFF;
+
+  /* semantic scores (light) */
+  --color-danger:    #9C2E1F;
+  --color-danger-bg: #F4DAD3;
+  --color-warning:   #8E6F38;
+  --color-warning-bg:#F1E5C4;
+  --color-info:      #3C4E5C;
+  --color-info-bg:   #DCE2E6;
+  --color-success:   #4A5D4E;
+  --color-success-bg:#DDE3DC;
+  --color-great:     #2F3F33;
+  --color-great-bg:  #DDE3DC;
+
+  /* sage + gold scales */
+  --color-sage-700: #2F3F33;
+  --color-sage-500: #4A5D4E;
+  --color-sage-300: #93A899;
+  --color-sage-100: #DDE3DC;
+  --color-gold-600: #8E6F38;
+  --color-gold-500: #B89556;
+  --color-gold-200: #E3D1A3;
+  --color-gold-100: #F1E5C4;
+
+  /* shadows */
+  --shadow-1: 0 1px 0 rgba(26, 23, 20, 0.04);
+  --shadow-2: 0 1px 2px rgba(26, 23, 20, 0.04), 0 1px 0 rgba(26, 23, 20, 0.03);
+  --shadow-3: 0 8px 24px -12px rgba(26, 23, 20, 0.10), 0 2px 4px rgba(26, 23, 20, 0.04);
 }
 
+/* ===== DARK THEME OVERRIDES =============================================== */
+[data-theme="dark"] {
+  --color-bg:           #0E1014;
+  --color-bg-elevated:  #161A21;
+  --color-bg-sunken:    #090B0F;
+  --color-bg-hover:     #1C2129;
+  --color-paper:        #1A1F26;
+
+  --color-fg-1: #ECE7DD;
+  --color-fg-2: #B5B0A4;
+  --color-fg-3: #837F73;
+  --color-fg-4: #595549;
+
+  --color-border:        #2A3038;
+  --color-border-faint:  #1F242B;
+  --color-border-strong: #444B55;
+
+  --color-accent:       #DD6E4B;
+  --color-accent-hover: #E89070;
+  --color-accent-tint:  #2E1A12;
+  --color-accent-fg:    #0E1014;
+
+  --color-danger:    #FF5B47;
+  --color-danger-bg: #391815;
+  --color-warning:   #FFC857;
+  --color-warning-bg:#3A2D14;
+  --color-info:      #6FAEDE;
+  --color-info-bg:   #15242E;
+  --color-success:   #88C99B;
+  --color-success-bg:#163322;
+  --color-great:     #4FA15B;
+  --color-great-bg:  #163322;
+
+  --color-sage-700: #4FA15B;
+  --color-sage-500: #88C99B;
+  --color-sage-300: #C7DDC9;
+  --color-sage-100: #163322;
+  --color-gold-600: #FFD17A;
+  --color-gold-500: #FFC857;
+  --color-gold-200: #5C4A1F;
+  --color-gold-100: #3A2D14;
+
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.4), 0 1px 0 rgba(0, 0, 0, 0.25);
+  --shadow-3: 0 20px 60px rgba(0, 0, 0, 0.55), 0 4px 16px rgba(0, 0, 0, 0.3);
+
+  color-scheme: dark;
+}
+
+/* ===== base ============================================================= */
+html { color-scheme: light; }
 body {
-  @apply bg-dark text-gray-100;
-  margin: 0;
-  font-family: 'IBM Plex Sans Thai', 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-fg-2);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+[lang="th"], .lang-th {
+  font-family: var(--font-thai);
 }
 
-input, textarea {
-  @apply bg-panel border border-gray-700 text-white focus:outline-none focus:border-hermes focus:ring-1 focus:ring-hermes rounded-md p-3 w-full transition-colors;
+/* Thai input letterspacing reset */
+input[lang="th"], textarea[lang="th"] {
+  font-family: var(--font-thai);
 }
 
-button {
-  @apply cursor-pointer transition-all active:scale-95;
+/* focus ring */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-accent) 35%, transparent);
+  border-radius: var(--radius-sm);
 }
 
+/* selection */
+::selection {
+  background: var(--color-accent-tint);
+  color: var(--color-fg-1);
+}
+[data-theme="dark"] ::selection {
+  background: var(--color-accent-hover);
+  color: #fff;
+}
+
+/* dark-mode image filter for the wordmark (it's authored in dark ink) */
+[data-theme="dark"] .brand-asset {
+  filter: invert(1) brightness(0.95) sepia(0.05);
+}
+
+/* ===== preserved motion utilities (used by Toast/sheet panels) =========== */
 @keyframes toast-in {
   from { transform: translateY(8px); opacity: 0; }
   to   { transform: none; opacity: 1; }
@@ -42,12 +209,6 @@ button {
 
 .sheet-up {
   animation: sheet-up 280ms cubic-bezier(0.32, 0.72, 0, 1) both;
-}
-
-:where(button, [role="button"], a, input, textarea, select, summary):focus-visible {
-  outline: 2px solid #F37021;
-  outline-offset: 2px;
-  border-radius: 6px;
 }
 
 :where(button, [role="button"]):disabled {
