@@ -4,7 +4,7 @@ import type { AdIdea, AdEvaluation, VisualPrompt } from './services/marketing-ag
 import type { RewriteState } from './components/PersonaScoreCard';
 import type { PersonaId, ParsedAdIdea } from './lib/schemas';
 import { fetchTrends, type TrendsSnapshot } from './services/trends';
-import { Loader2, Target, Settings, MessageSquareQuote, ChevronDown } from 'lucide-react';
+import { Loader2, Target, Settings, MessageSquareQuote, ChevronDown, Bookmark } from 'lucide-react';
 import { InlineError } from './components/InlineError';
 import { useToast } from './components/toast-context';
 import { CompetitorInput } from './components/CompetitorInput';
@@ -45,6 +45,7 @@ export default function App() {
   const customerQuotesApi = useCustomerQuotes();
   const [factsPanelOpen, setFactsPanelOpen] = useState(false);
   const [quotesPanelOpen, setQuotesPanelOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'generator' | 'library'>('generator');
   const [performanceTarget, setPerformanceTarget] = useState<string | null>(null);
   const [translateTarget, setTranslateTarget] = useState<string | null>(null);
   const productId = useId();
@@ -503,8 +504,42 @@ ${personaLines}
             </span>
           </div>
           <nav className="hidden md:flex items-center gap-1 ml-2 flex-1" aria-label="Primary">
-            <a href="#" className="px-3 py-1.5 text-sm rounded-md text-fg-1 bg-bg-hover font-medium">Generator</a>
-            <a href="#" className="px-3 py-1.5 text-sm rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors">Library</a>
+            <button
+              type="button"
+              onClick={() => setActiveTab('generator')}
+              aria-current={activeTab === 'generator' ? 'page' : undefined}
+              className={
+                activeTab === 'generator'
+                  ? 'px-3 py-1.5 text-sm rounded-md text-fg-1 bg-bg-hover font-medium'
+                  : 'px-3 py-1.5 text-sm rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors'
+              }
+            >
+              Generator
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('library')}
+              aria-current={activeTab === 'library' ? 'page' : undefined}
+              className={
+                activeTab === 'library'
+                  ? 'px-3 py-1.5 text-sm rounded-md text-fg-1 bg-bg-hover font-medium inline-flex items-center gap-1.5'
+                  : 'px-3 py-1.5 text-sm rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors inline-flex items-center gap-1.5'
+              }
+            >
+              Library
+              {savedAds.length > 0 && (
+                <span
+                  className="font-mono text-[10px] tabular-nums px-1.5 py-0.5 rounded-pill border"
+                  style={{
+                    background: 'var(--color-bg-sunken)',
+                    borderColor: 'var(--color-border-faint)',
+                    color: 'var(--color-fg-3)',
+                  }}
+                >
+                  {savedAds.length}
+                </span>
+              )}
+            </button>
             <a href="#" className="px-3 py-1.5 text-sm rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors">Trends</a>
             <a href="#" className="px-3 py-1.5 text-sm rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors">Brand facts</a>
             <a href="#" className="px-3 py-1.5 text-sm rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors">Settings</a>
@@ -521,10 +556,12 @@ ${personaLines}
         <div className="max-w-[1440px] mx-auto px-6 py-7 flex items-end justify-between gap-6 flex-wrap">
           <div>
             <div className="font-mono text-[10.5px] tracking-[0.16em] uppercase text-fg-3 mb-2">
-              Marketing Lab · Generator
+              Marketing Lab · {activeTab === 'library' ? 'Library' : 'Generator'}
             </div>
             <h1 className="font-display text-3xl md:text-4xl text-fg-1 leading-tight tracking-tight">
-              Brainstorm &amp; analyze ad variations
+              {activeTab === 'library'
+                ? 'คลังโฆษณาที่บันทึก'
+                : 'Brainstorm & analyze ad variations'}
             </h1>
           </div>
           <div className="flex items-center gap-4 text-[11px] text-fg-3 font-mono uppercase tracking-[0.12em]">
@@ -538,6 +575,7 @@ ${personaLines}
       </section>
 
       {/* Horizontal generator bar — NOT sticky */}
+      {activeTab === 'generator' && (
       <section
         aria-label="ตัวควบคุมการสร้างโฆษณา"
         className="border-b border-border bg-bg-elevated"
@@ -563,7 +601,7 @@ ${personaLines}
                 rows={2}
                 placeholder="เช่น ม่านลอนเทปผ้า Blackout"
                 lang="th"
-                className="w-full min-h-[64px] resize-none"
+                className="w-full min-h-[64px] resize-none rounded-md border border-border bg-bg px-3 py-2 text-sm leading-relaxed text-fg-1 placeholder:text-fg-4 transition-colors hover:border-border-strong focus:border-accent"
               />
             </div>
             <div>
@@ -584,7 +622,7 @@ ${personaLines}
                 rows={2}
                 placeholder="เช่น ประเมินหน้างานฟรี ท่าศาลา-ลพบุรี"
                 lang="th"
-                className="w-full min-h-[64px] resize-none"
+                className="w-full min-h-[64px] resize-none rounded-md border border-border bg-bg px-3 py-2 text-sm leading-relaxed text-fg-1 placeholder:text-fg-4 transition-colors hover:border-border-strong focus:border-accent"
               />
             </div>
             <div className="flex flex-col">
@@ -647,89 +685,118 @@ ${personaLines}
           </div>
         </div>
       </section>
+      )}
 
       {/* Work area */}
       <main>
         <div className="max-w-[1440px] mx-auto px-6 py-8">
-          <section aria-labelledby={resultsHeadingId} className="space-y-4">
-            <h2 id={resultsHeadingId} className="sr-only">ผลลัพธ์โฆษณา</h2>
+          {activeTab === 'generator' && (
+            <section aria-labelledby={resultsHeadingId} className="space-y-4">
+              <h2 id={resultsHeadingId} className="sr-only">ผลลัพธ์โฆษณา</h2>
 
-            {generateError && (
-              <InlineError
-                message={generateError}
-                onRetry={handleGenerate}
-                onDismiss={() => setGenerateError(null)}
+              {generateError && (
+                <InlineError
+                  message={generateError}
+                  onRetry={handleGenerate}
+                  onDismiss={() => setGenerateError(null)}
+                />
+              )}
+
+              {ads.length === 0 && !loading && !generateError && (
+                <div
+                  role="status"
+                  className="flex items-center justify-center border border-dashed border-border rounded-md p-12 text-fg-3 text-sm"
+                  lang="th"
+                >
+                  กรอกข้อมูลด้านบนแล้วกด <b className="text-fg-1 mx-1 font-medium">Generate Ads</b> เพื่อเริ่มสร้างโฆษณา
+                </div>
+              )}
+
+              {ads.length > 0 && (
+                <>
+                  {/* Summary strip — 3 mini-gauges */}
+                  <SummaryStrip ads={ads} evaluations={evaluations} />
+
+                  <div className="flex items-end justify-between gap-4 pt-2">
+                    <h3 className="text-base font-semibold text-fg-1">
+                      Drafts <span className="text-fg-4 font-normal text-sm">· click a row to expand</span>
+                    </h3>
+                    <span className="font-mono text-[10.5px] tracking-[0.12em] uppercase text-fg-3">
+                      {Object.keys(evaluations).length} of {ads.length} scored
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {ads.map((ad, idx) => (
+                      <AdCard
+                        key={ad.clientId}
+                        ad={ad}
+                        idx={idx}
+                        expanded={expanded === idx}
+                        onToggle={handleToggleExpand}
+                        evaluation={evaluations[idx]}
+                        evalLoading={evalLoading === idx}
+                        evalError={evalErrors[idx]}
+                        onEvaluate={() => handleEvaluate(idx, ad)}
+                        visualPrompt={visualPrompts[idx]}
+                        visualLoading={visualLoading === idx}
+                        visualError={visualErrors[idx]}
+                        onGenerateVisual={() => handleGenerateVisual(idx, ad.visual_idea)}
+                        ensembleLoading={ensembleLoading === idx}
+                        ensembleError={ensembleErrors[idx]}
+                        onRunEnsemble={() => handleRunEnsemble(idx, ad)}
+                        copiedIndex={copiedIndex}
+                        onCopy={handleCopy}
+                        onSave={() => handleSaveAd(idx, ad)}
+                        rewriteStateOf={(pid) => rewrites[`${ad.clientId}::${pid}`]}
+                        onRewrite={(pid) => handleRewrite(ad, pid)}
+                        onCopyRewrite={handleCopyRewrite}
+                        trendsNew={trendsRef.current?.new_in_window}
+                        trendsPrev={trendsRef.current?.daily_top_previous}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </section>
+          )}
+
+          {activeTab === 'library' && (
+            savedAds.length > 0 ? (
+              <SavedLibrary
+                items={savedAds}
+                headingId={savedHeadingId}
+                onRemove={handleRemoveSaved}
+                onToggleOutcome={handleToggleOutcome}
+                onOpenPerformance={setPerformanceTarget}
+                onOpenTranslate={setTranslateTarget}
+                onExport={handleExportObsidian}
+                onCopy={handleCopyRewrite}
               />
-            )}
-
-            {ads.length === 0 && !loading && !generateError && savedAds.length === 0 && (
+            ) : (
               <div
                 role="status"
-                className="flex items-center justify-center border border-dashed border-border rounded-md p-12 text-fg-3 text-sm"
+                className="flex flex-col items-center justify-center border border-dashed border-border rounded-md p-12 text-fg-3 text-sm gap-3"
                 lang="th"
               >
-                กรอกข้อมูลด้านบนแล้วกด <b className="text-fg-1 mx-1 font-medium">Generate Ads</b> เพื่อเริ่มสร้างโฆษณา
+                <Bookmark className="w-8 h-8 text-fg-4" strokeWidth={1.5} aria-hidden="true" />
+                <div className="text-center space-y-1.5">
+                  <p className="text-fg-2">ยังไม่มีโฆษณาที่บันทึก</p>
+                  <p className="text-fg-4 text-[12.5px]">
+                    ไปที่แท็บ
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('generator')}
+                      className="mx-1 underline-offset-2 hover:underline text-fg-1 font-medium"
+                    >
+                      Generator
+                    </button>
+                    เพื่อสร้างและบันทึกโฆษณาใหม่
+                  </p>
+                </div>
               </div>
-            )}
-
-            {ads.length > 0 && (
-              <>
-                {/* Summary strip — 3 mini-gauges */}
-                <SummaryStrip ads={ads} evaluations={evaluations} />
-
-                <div className="flex items-end justify-between gap-4 pt-2">
-                  <h3 className="text-base font-semibold text-fg-1">
-                    Drafts <span className="text-fg-4 font-normal text-sm">· click a row to expand</span>
-                  </h3>
-                  <span className="font-mono text-[10.5px] tracking-[0.12em] uppercase text-fg-3">
-                    {Object.keys(evaluations).length} of {ads.length} scored
-                  </span>
-                </div>
-
-                <div className="space-y-3">
-                  {ads.map((ad, idx) => (
-                    <AdCard
-                      key={ad.clientId}
-                      ad={ad}
-                      idx={idx}
-                      expanded={expanded === idx}
-                      onToggle={handleToggleExpand}
-                      evaluation={evaluations[idx]}
-                      evalLoading={evalLoading === idx}
-                      evalError={evalErrors[idx]}
-                      onEvaluate={() => handleEvaluate(idx, ad)}
-                      visualPrompt={visualPrompts[idx]}
-                      visualLoading={visualLoading === idx}
-                      visualError={visualErrors[idx]}
-                      onGenerateVisual={() => handleGenerateVisual(idx, ad.visual_idea)}
-                      ensembleLoading={ensembleLoading === idx}
-                      ensembleError={ensembleErrors[idx]}
-                      onRunEnsemble={() => handleRunEnsemble(idx, ad)}
-                      copiedIndex={copiedIndex}
-                      onCopy={handleCopy}
-                      onSave={() => handleSaveAd(idx, ad)}
-                      rewriteStateOf={(pid) => rewrites[`${ad.clientId}::${pid}`]}
-                      onRewrite={(pid) => handleRewrite(ad, pid)}
-                      onCopyRewrite={handleCopyRewrite}
-                      trendsNew={trendsRef.current?.new_in_window}
-                      trendsPrev={trendsRef.current?.daily_top_previous}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-
-            <SavedLibrary
-              items={savedAds}
-              headingId={savedHeadingId}
-              onRemove={handleRemoveSaved}
-              onToggleOutcome={handleToggleOutcome}
-              onOpenPerformance={setPerformanceTarget}
-              onOpenTranslate={setTranslateTarget}
-              onExport={handleExportObsidian}
-              onCopy={handleCopyRewrite}
-            />
-          </section>
+            )
+          )}
         </div>
       </main>
 

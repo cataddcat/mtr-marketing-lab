@@ -46,16 +46,15 @@ export function SavedLibrary({
   if (items.length === 0) return null;
 
   return (
-    <section
-      aria-labelledby={headingId}
-      className="mt-12 pt-8 border-t"
-      style={{ borderColor: 'var(--color-border)' }}
-    >
+    <section aria-labelledby={headingId}>
       <div className="flex items-end justify-between gap-4 mb-4">
-        <h2 id={headingId} className="text-lg font-semibold text-fg-1 inline-flex items-center gap-2">
-          <Bookmark className="w-4 h-4" strokeWidth={1.5} style={{ color: 'var(--color-accent)' }} aria-hidden="true" />
+        <h2 id={headingId} className="sr-only">
           คลังโฆษณาที่บันทึก
         </h2>
+        <span className="inline-flex items-center gap-2 text-sm font-medium text-fg-2">
+          <Bookmark className="w-4 h-4" strokeWidth={1.5} style={{ color: 'var(--color-accent)' }} aria-hidden="true" />
+          รายการที่บันทึก
+        </span>
         <span className="font-mono text-[10.5px] tracking-[0.12em] uppercase text-fg-3">
           {items.length} saved
         </span>

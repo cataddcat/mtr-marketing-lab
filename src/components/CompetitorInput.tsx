@@ -64,7 +64,7 @@ export function CompetitorInput({ value, onChange }: Props) {
         rows={3}
         placeholder="วาง ad ของคู่แข่งที่นี่ — Judge จะเปรียบเทียบกับ ad ที่เรา generate"
         lang="th"
-        className="w-full min-h-[80px] resize-y text-sm"
+        className="w-full min-h-[80px] resize-y rounded-md border border-border bg-bg px-3 py-2 text-sm leading-relaxed text-fg-1 placeholder:text-fg-4 transition-colors hover:border-border-strong focus:border-accent"
       />
       <p className="text-[11px] text-fg-3 mt-1.5 leading-relaxed" lang="th">
         เปิดใช้แล้ว — ทุกครั้งที่กด "ประเมินความโดนใจ" ระบบจะ output{' '}
