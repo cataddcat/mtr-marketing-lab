@@ -1,5 +1,5 @@
 import * as v from 'valibot';
-import { aiClient, aiJudge } from '../lib/ai-config';
+import { callAI, type AIRole } from '../lib/ai-providers';
 import { extractJson, JsonExtractionError } from '../lib/json-extract';
 import {
   AdIdeaArraySchema,
@@ -111,11 +111,8 @@ const generateAndExtract = async <TSchema extends v.GenericSchema>(
   }
 };
 
-const chatCaller: Caller = (system, user, signal) =>
-  aiClient(system, user, { signal });
-
-const judgeCallerFor = (cacheKeyData: string): Caller =>
-  (system, user, signal) => aiJudge(system, user, { signal, cacheKeyData });
+const callerFor = (role: AIRole, cacheKeyData?: string): Caller =>
+  (system, user, signal) => callAI(role, system, user, { signal, cacheKeyData });
 
 // ════════════════════════════════════════════════════════════════════
 // generateAds — 4 styles (3 classic + GenZ-coded)
@@ -176,7 +173,7 @@ export const generateAds = async (
       userPrompt,
       schema: AdIdeaArraySchema,
       kind: 'array',
-      caller: chatCaller,
+      caller: callerFor('generator'),
       signal,
     });
     return parsed.map(ad => ({ ...ad, clientId: crypto.randomUUID() }));
@@ -455,7 +452,7 @@ export const evaluateAd = async (
       userPrompt,
       schema: AdEvaluationSchema,
       kind: 'object',
-      caller: judgeCallerFor(cacheKeyData),
+      caller: callerFor('judge', cacheKeyData),
       signal,
     });
   } catch (e) {
@@ -698,7 +695,7 @@ feedback จาก "${personaLabel}":
       userPrompt,
       schema: AdIdeaSchema,
       kind: 'object',
-      caller: chatCaller,
+      caller: callerFor('rewriter'),
       signal,
     });
     // force original style (LLM sometimes paraphrases it)
@@ -771,7 +768,7 @@ ${ad.visual_idea}`;
       userPrompt,
       schema: TranslatedAdSchema,
       kind: 'object',
-      caller: chatCaller,
+      caller: callerFor('translator'),
       signal,
     });
     return { language, copy: parsed.copy, visual_idea: parsed.visual_idea };
@@ -807,7 +804,7 @@ export const generateImagePrompt = async (
       userPrompt,
       schema: VisualPromptSchema,
       kind: 'object',
-      caller: chatCaller,
+      caller: callerFor('visual'),
       signal,
     });
   } catch (e) {

@@ -4,7 +4,7 @@ import type { AdIdea, AdEvaluation, VisualPrompt } from './services/marketing-ag
 import type { RewriteState } from './components/PersonaScoreCard';
 import type { PersonaId, ParsedAdIdea } from './lib/schemas';
 import { fetchTrends, type TrendsSnapshot } from './services/trends';
-import { Loader2, Target, Bookmark, Settings, MessageSquareQuote, Sparkles } from 'lucide-react';
+import { Loader2, Target, Bookmark, Settings, MessageSquareQuote, Sparkles, LogOut } from 'lucide-react';
 import { InlineError } from './components/InlineError';
 import { useToast } from './components/toast-context';
 import { CompetitorInput } from './components/CompetitorInput';
@@ -26,6 +26,8 @@ import { SavedLibrary } from './components/SavedLibrary';
 import { useBrandFacts } from './hooks/useBrandFacts';
 import { useCustomerQuotes } from './hooks/useCustomerQuotes';
 import { useStrategyBrief } from './hooks/useStrategyBrief';
+import { useAuth } from './hooks/useAuth';
+import { SignInScreen } from './components/SignInScreen';
 import { PERSONA_LABELS } from './lib/schemas';
 import { PRODUCT_EXAMPLES, PROMO_EXAMPLES } from './lib/example-prompts';
 import { selectCalibrationExamples } from './lib/calibration';
@@ -46,6 +48,7 @@ const isAbortError = (err: unknown): boolean =>
   err instanceof DOMException && err.name === 'AbortError';
 
 export default function App() {
+  const auth = useAuth();
   const toast = useToast();
   const brandFactsApi = useBrandFacts();
   const customerQuotesApi = useCustomerQuotes();
@@ -517,6 +520,24 @@ ${personaLines}
   const activeQuotes = customerQuotesApi.quotes.filter(q => q.enabled && q.quote.trim().length > 0).length;
   const calibrationExamples = selectCalibrationExamples(savedAds);
 
+  // Auth gate (Track D1). When Supabase is not configured, auth.status is
+  // 'disabled' and we render the app as before (local-only mode).
+  if (auth.status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2
+          className="w-6 h-6 animate-spin"
+          strokeWidth={1.5}
+          style={{ color: 'var(--color-fg-3)' }}
+          aria-hidden="true"
+        />
+      </div>
+    );
+  }
+  if (auth.status === 'signed-out') {
+    return <SignInScreen />;
+  }
+
   return (
     <div className="min-h-screen">
       {/* App header — NOT sticky */}
@@ -570,6 +591,33 @@ ${personaLines}
             <a href="#" className="px-3 py-1.5 text-sm rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors">Settings</a>
           </nav>
           <div className="ml-auto flex items-center gap-3 shrink-0">
+            {auth.status === 'signed-in' && auth.session?.user && (
+              <div className="inline-flex items-center gap-2">
+                <span
+                  className="font-mono text-[10.5px] tracking-[0.10em] uppercase px-2 py-0.5 rounded-pill border"
+                  style={{
+                    background: 'color-mix(in oklch, var(--color-accent) 10%, transparent)',
+                    borderColor: 'color-mix(in oklch, var(--color-accent) 35%, transparent)',
+                    color: 'var(--color-accent)',
+                  }}
+                  title={auth.session.user.email ?? auth.session.user.id}
+                >
+                  {auth.profile?.tier ?? 'free'}
+                </span>
+                <span className="hidden md:inline text-[11px] text-fg-3 max-w-[160px] truncate">
+                  {auth.session.user.email}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void auth.signOut()}
+                  className="inline-flex items-center justify-center min-w-[36px] min-h-[36px] text-fg-3 hover:text-fg-1 transition-colors"
+                  title="ออกจากระบบ"
+                  aria-label="ออกจากระบบ"
+                >
+                  <LogOut className="w-4 h-4" strokeWidth={1.5} aria-hidden="true" />
+                </button>
+              </div>
+            )}
             <ThemeToggle />
             <span className="font-mono text-[10.5px] tracking-[0.12em] uppercase text-fg-4">v2 · internal</span>
           </div>

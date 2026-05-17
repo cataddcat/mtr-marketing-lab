@@ -1,5 +1,5 @@
 import * as v from 'valibot';
-import { aiClient } from '../lib/ai-config';
+import { callAI } from '../lib/ai-providers';
 import { extractJson, JsonExtractionError } from '../lib/json-extract';
 import {
   StrategyBriefDraftSchema,
@@ -142,7 +142,7 @@ export const fetchStrategyBrief = async (
 
   let raw: string;
   try {
-    raw = await aiClient(systemPrompt, userPrompt, { signal: options.signal });
+    raw = await callAI('strategist', systemPrompt, userPrompt, { signal: options.signal });
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') throw err;
     throw err;
@@ -162,7 +162,7 @@ export const fetchStrategyBrief = async (
     const repairPrompt = buildRepairPrompt(userPrompt, firstErr);
     let retryRaw: string;
     try {
-      retryRaw = await aiClient(systemPrompt, repairPrompt, { signal: options.signal });
+      retryRaw = await callAI('strategist', systemPrompt, repairPrompt, { signal: options.signal });
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') throw err;
       throw err;
