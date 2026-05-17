@@ -4,7 +4,7 @@ import type { AdIdea, AdEvaluation, VisualPrompt } from './services/marketing-ag
 import type { RewriteState } from './components/PersonaScoreCard';
 import type { PersonaId, ParsedAdIdea } from './lib/schemas';
 import { fetchTrends, type TrendsSnapshot } from './services/trends';
-import { Loader2, Target, Bookmark, Settings, MessageSquareQuote, Sparkles, LogOut, FolderTree } from 'lucide-react';
+import { Loader2, Target, Bookmark, Settings, MessageSquareQuote, Sparkles, LogOut, FolderTree, Fish } from 'lucide-react';
 import { InlineError } from './components/InlineError';
 import { useToast } from './components/toast-context';
 import { CompetitorInput } from './components/CompetitorInput';
@@ -35,6 +35,8 @@ import { useCapability } from './hooks/useCapability';
 import { useTier } from './hooks/useTier';
 import { recordUsage } from './lib/capabilities';
 import { TIER_LABELS } from './lib/capabilities';
+import { CommunitySimulationPanel } from './components/CommunitySimulationPanel';
+import { isMiroFishConfigured } from './lib/mirofish-client';
 import { PERSONA_LABELS } from './lib/schemas';
 import { PRODUCT_EXAMPLES, PROMO_EXAMPLES } from './lib/example-prompts';
 import { selectCalibrationExamples } from './lib/calibration';
@@ -65,6 +67,8 @@ export default function App() {
   const [briefPanelOpen, setBriefPanelOpen] = useState(false);
   const [exportPanelOpen, setExportPanelOpen] = useState(false);
   const [tierPanelOpen, setTierPanelOpen] = useState(false);
+  const [communityPanelOpen, setCommunityPanelOpen] = useState(false);
+  const [communityTargetAdIndex, setCommunityTargetAdIndex] = useState<number | null>(null);
   const [quotesActivePersona, setQuotesActivePersona] = useState<PersonaId>('family_man');
   const [performanceTarget, setPerformanceTarget] = useState<string | null>(null);
   const [translateTarget, setTranslateTarget] = useState<string | null>(null);
@@ -659,6 +663,20 @@ ${personaLines}
             <a href="#" className="px-3 py-1.5 text-sm rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors">Settings</a>
           </nav>
           <div className="ml-auto flex items-center gap-3 shrink-0">
+            {isMiroFishConfigured() && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCommunityTargetAdIndex(null);
+                  setCommunityPanelOpen(true);
+                }}
+                className="inline-flex items-center justify-center min-w-[36px] min-h-[36px] rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors"
+                title="Community simulation (MiroFish)"
+                aria-label="Community simulation"
+              >
+                <Fish className="w-4 h-4" strokeWidth={1.5} aria-hidden="true" />
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setExportPanelOpen(true)}
@@ -1079,6 +1097,18 @@ ${personaLines}
         title="Plan & Billing"
       >
         <TierSwitcher />
+      </Sheet>
+
+      <Sheet
+        open={communityPanelOpen}
+        onClose={() => setCommunityPanelOpen(false)}
+        title="Community simulation"
+      >
+        <CommunitySimulationPanel
+          ad={communityTargetAdIndex !== null ? ads[communityTargetAdIndex] ?? null : null}
+          brandFacts={brandFactsApi.facts}
+          customerQuotes={customerQuotesApi.quotes}
+        />
       </Sheet>
 
       <Sheet
