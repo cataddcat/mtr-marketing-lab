@@ -4,7 +4,7 @@ import type { AdIdea, AdEvaluation, VisualPrompt } from './services/marketing-ag
 import type { RewriteState } from './components/PersonaScoreCard';
 import type { PersonaId, ParsedAdIdea } from './lib/schemas';
 import { fetchTrends, type TrendsSnapshot } from './services/trends';
-import { Loader2, Target, Bookmark, Settings, MessageSquareQuote, Sparkles, LogOut } from 'lucide-react';
+import { Loader2, Target, Bookmark, Settings, MessageSquareQuote, Sparkles, LogOut, FolderTree } from 'lucide-react';
 import { InlineError } from './components/InlineError';
 import { useToast } from './components/toast-context';
 import { CompetitorInput } from './components/CompetitorInput';
@@ -28,6 +28,13 @@ import { useCustomerQuotes } from './hooks/useCustomerQuotes';
 import { useStrategyBrief } from './hooks/useStrategyBrief';
 import { useAuth } from './hooks/useAuth';
 import { SignInScreen } from './components/SignInScreen';
+import { useAllFeedback } from './hooks/useFeedback';
+import { ExportPanel } from './components/ExportPanel';
+import { TierSwitcher } from './components/TierSwitcher';
+import { useCapability } from './hooks/useCapability';
+import { useTier } from './hooks/useTier';
+import { recordUsage } from './lib/capabilities';
+import { TIER_LABELS } from './lib/capabilities';
 import { PERSONA_LABELS } from './lib/schemas';
 import { PRODUCT_EXAMPLES, PROMO_EXAMPLES } from './lib/example-prompts';
 import { selectCalibrationExamples } from './lib/calibration';
@@ -56,6 +63,8 @@ export default function App() {
   const [factsPanelOpen, setFactsPanelOpen] = useState(false);
   const [quotesPanelOpen, setQuotesPanelOpen] = useState(false);
   const [briefPanelOpen, setBriefPanelOpen] = useState(false);
+  const [exportPanelOpen, setExportPanelOpen] = useState(false);
+  const [tierPanelOpen, setTierPanelOpen] = useState(false);
   const [quotesActivePersona, setQuotesActivePersona] = useState<PersonaId>('family_man');
   const [performanceTarget, setPerformanceTarget] = useState<string | null>(null);
   const [translateTarget, setTranslateTarget] = useState<string | null>(null);
@@ -131,6 +140,15 @@ export default function App() {
 
   const handleGenerate = async () => {
     if (!product) return;
+    if (!generateGate.allowed) {
+      toast.info(
+        generateGate.limit
+          ? `Free tier: ${generateGate.used}/${generateGate.limit} ต่อวัน — upgrade เพื่อสร้างเพิ่ม`
+          : 'Tier ปัจจุบันไม่อนุญาตให้สร้าง ad — upgrade ก่อน',
+      );
+      setTierPanelOpen(true);
+      return;
+    }
 
     generateAbortRef.current?.abort();
     const controller = new AbortController();
@@ -172,6 +190,7 @@ export default function App() {
         setGenerateError('The AI returned no usable ad ideas. Try rewording your input.');
       } else {
         setExpanded(0); // auto-expand the first variation per HANDOFF Step 4
+        recordUsage('generate_ad');
       }
     } catch (err) {
       if (isAbortError(err)) return;
@@ -188,6 +207,34 @@ export default function App() {
 
   const handleToggleExpand = (idx: number) => {
     setExpanded(prev => (prev === idx ? null : idx));
+  };
+
+  const handleGenerateBrief = async () => {
+    if (!briefGate.allowed) {
+      toast.info(
+        briefGate.limit
+          ? `Free tier: ${briefGate.used}/${briefGate.limit} brief/วัน — upgrade เพื่อร่างเพิ่ม`
+          : 'Tier ปัจจุบันไม่อนุญาตให้ร่าง brief',
+      );
+      setTierPanelOpen(true);
+      return;
+    }
+    await strategyBriefApi.generate();
+    if (strategyBriefApi.error === null) recordUsage('brief_generate');
+  };
+
+  const handleRegenerateBrief = async () => {
+    if (!briefGate.allowed) {
+      toast.info(
+        briefGate.limit
+          ? `Free tier: ${briefGate.used}/${briefGate.limit} brief/วัน — upgrade เพื่อร่างเพิ่ม`
+          : 'Tier ปัจจุบันไม่อนุญาตให้ร่าง brief',
+      );
+      setTierPanelOpen(true);
+      return;
+    }
+    await strategyBriefApi.regenerate();
+    if (strategyBriefApi.error === null) recordUsage('brief_generate');
   };
 
   const handleEvaluate = async (index: number, ad: AdIdea) => {
@@ -536,6 +583,10 @@ ${personaLines}
   const activeBrandFacts = brandFactsApi.facts.filter(f => f.enabled).length;
   const activeQuotes = customerQuotesApi.quotes.filter(q => q.enabled && q.quote.trim().length > 0).length;
   const calibrationExamples = selectCalibrationExamples(savedAds);
+  const feedbackRecords = useAllFeedback();
+  const { tier } = useTier();
+  const generateGate = useCapability('generate_ad');
+  const briefGate = useCapability('brief_generate');
 
   // Auth gate (Track D1). When Supabase is not configured, auth.status is
   // 'disabled' and we render the app as before (local-only mode).
@@ -608,19 +659,46 @@ ${personaLines}
             <a href="#" className="px-3 py-1.5 text-sm rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors">Settings</a>
           </nav>
           <div className="ml-auto flex items-center gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={() => setExportPanelOpen(true)}
+              className="inline-flex items-center justify-center min-w-[36px] min-h-[36px] rounded-md text-fg-3 hover:text-fg-1 hover:bg-bg-hover transition-colors"
+              title="Export Obsidian vault"
+              aria-label="Export Obsidian vault"
+            >
+              <FolderTree className="w-4 h-4" strokeWidth={1.5} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setTierPanelOpen(true)}
+              className="font-mono text-[10.5px] tracking-[0.10em] uppercase px-2 py-1 min-h-[28px] rounded-pill border transition-colors hover:bg-bg-hover"
+              style={{
+                background:
+                  tier === 'paid'
+                    ? 'color-mix(in oklch, var(--color-accent) 14%, transparent)'
+                    : tier === 'byok'
+                      ? 'color-mix(in oklch, var(--color-info) 12%, transparent)'
+                      : 'var(--color-bg-sunken)',
+                borderColor:
+                  tier === 'paid'
+                    ? 'color-mix(in oklch, var(--color-accent) 45%, transparent)'
+                    : tier === 'byok'
+                      ? 'color-mix(in oklch, var(--color-info) 40%, transparent)'
+                      : 'var(--color-border-faint)',
+                color:
+                  tier === 'paid'
+                    ? 'var(--color-accent)'
+                    : tier === 'byok'
+                      ? 'var(--color-info)'
+                      : 'var(--color-fg-2)',
+              }}
+              title={`Tier: ${TIER_LABELS[tier]} — คลิกเพื่อเปลี่ยน`}
+              aria-label={`Tier ปัจจุบัน ${TIER_LABELS[tier]}`}
+            >
+              {TIER_LABELS[tier]}
+            </button>
             {auth.status === 'signed-in' && auth.session?.user && (
               <div className="inline-flex items-center gap-2">
-                <span
-                  className="font-mono text-[10.5px] tracking-[0.10em] uppercase px-2 py-0.5 rounded-pill border"
-                  style={{
-                    background: 'color-mix(in oklch, var(--color-accent) 10%, transparent)',
-                    borderColor: 'color-mix(in oklch, var(--color-accent) 35%, transparent)',
-                    color: 'var(--color-accent)',
-                  }}
-                  title={auth.session.user.email ?? auth.session.user.id}
-                >
-                  {auth.profile?.tier ?? 'free'}
-                </span>
                 <span className="hidden md:inline text-[11px] text-fg-3 max-w-[160px] truncate">
                   {auth.session.user.email}
                 </span>
@@ -732,18 +810,28 @@ ${personaLines}
                 onClick={handleGenerate}
                 disabled={loading || !product}
                 aria-busy={loading}
-                className="flex-1 min-h-[140px] rounded-md flex items-center justify-center gap-2 font-medium transition-colors disabled:opacity-50"
+                className="flex-1 min-h-[140px] rounded-md flex flex-col items-center justify-center gap-1 font-medium transition-colors disabled:opacity-50"
                 style={{
                   background: 'var(--color-accent)',
                   color: 'var(--color-accent-fg)',
                 }}
               >
-                {loading ? (
-                  <Loader2 className="animate-spin w-5 h-5" strokeWidth={1.5} aria-hidden="true" />
-                ) : (
-                  <Target className="w-5 h-5" strokeWidth={1.5} aria-hidden="true" />
+                <span className="inline-flex items-center gap-2">
+                  {loading ? (
+                    <Loader2 className="animate-spin w-5 h-5" strokeWidth={1.5} aria-hidden="true" />
+                  ) : (
+                    <Target className="w-5 h-5" strokeWidth={1.5} aria-hidden="true" />
+                  )}
+                  {loading ? 'Processing...' : 'Generate Ads'}
+                </span>
+                {generateGate.limit !== null && (
+                  <span
+                    className="font-mono text-[10px] tracking-[0.10em] uppercase tabular-nums opacity-80"
+                    title="ใช้ไปแล้ว / โควต้าต่อวัน"
+                  >
+                    {generateGate.used}/{generateGate.limit} วันนี้
+                  </span>
                 )}
-                {loading ? 'Processing...' : 'Generate Ads'}
               </button>
             </div>
           </div>
@@ -986,6 +1074,32 @@ ${personaLines}
       </Sheet>
 
       <Sheet
+        open={tierPanelOpen}
+        onClose={() => setTierPanelOpen(false)}
+        title="Plan & Billing"
+      >
+        <TierSwitcher />
+      </Sheet>
+
+      <Sheet
+        open={exportPanelOpen}
+        onClose={() => setExportPanelOpen(false)}
+        title="Export"
+      >
+        <ExportPanel
+          input={{
+            brandFacts: brandFactsApi.facts,
+            customerQuotes: customerQuotesApi.quotes,
+            briefs: strategyBriefApi.all,
+            savedAds,
+            feedback: feedbackRecords,
+            exportedAt: new Date().toISOString(),
+          }}
+          onClose={() => setExportPanelOpen(false)}
+        />
+      </Sheet>
+
+      <Sheet
         open={briefPanelOpen}
         onClose={() => setBriefPanelOpen(false)}
         title="Strategy Brief"
@@ -994,8 +1108,8 @@ ${personaLines}
             hasBrief={strategyBriefApi.current !== null}
             loading={strategyBriefApi.loading}
             canDraft={product.trim().length > 0}
-            onGenerate={strategyBriefApi.generate}
-            onRegenerate={strategyBriefApi.regenerate}
+            onGenerate={handleGenerateBrief}
+            onRegenerate={handleRegenerateBrief}
           />
         }
       >
@@ -1005,8 +1119,8 @@ ${personaLines}
           error={strategyBriefApi.error}
           isStale={strategyBriefApi.isStale}
           product={product}
-          onGenerate={strategyBriefApi.generate}
-          onRegenerate={strategyBriefApi.regenerate}
+          onGenerate={handleGenerateBrief}
+          onRegenerate={handleRegenerateBrief}
           onUpdate={strategyBriefApi.update}
           onClear={strategyBriefApi.clearCurrent}
         />
