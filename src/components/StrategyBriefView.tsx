@@ -17,6 +17,8 @@ import {
 } from '../lib/strategy-brief';
 import type { ChannelId, PersonaId } from '../lib/schemas';
 import { CHANNEL_LABELS, PERSONA_LABELS } from '../lib/schemas';
+import { FeedbackThumbs } from './FeedbackThumbs';
+import { hashContent } from '../lib/feedback';
 
 interface Props {
   readonly brief: StrategyBrief | null;
@@ -150,7 +152,18 @@ export function StrategyBriefView({
         </div>
       </div>
 
-      <SectionCard title="Positioning">
+      <SectionCard
+        title="Positioning"
+        feedbackHash={hashContent(
+          'strategist',
+          brief.campaign_hash,
+          'positioning',
+          brief.positioning.archetype,
+          brief.positioning.value_prop,
+        )}
+        feedbackKind="brief_positioning"
+        feedbackParentId={brief.campaign_hash}
+      >
         <SelectField
           label="Brand archetype"
           value={brief.positioning.archetype}
@@ -183,7 +196,17 @@ export function StrategyBriefView({
         />
       </SectionCard>
 
-      <SectionCard title="Audience Segments">
+      <SectionCard
+        title="Audience Segments"
+        feedbackHash={hashContent(
+          'strategist',
+          brief.campaign_hash,
+          'segments',
+          brief.segments.map(s => s.name).join('|'),
+        )}
+        feedbackKind="brief_segments"
+        feedbackParentId={brief.campaign_hash}
+      >
         {brief.segments.map((seg, i) => (
           <SegmentEditor
             key={i}
@@ -194,7 +217,17 @@ export function StrategyBriefView({
       </SectionCard>
 
       {brief.competitors.length > 0 && (
-        <SectionCard title="Competitor landscape">
+        <SectionCard
+          title="Competitor landscape"
+          feedbackHash={hashContent(
+            'strategist',
+            brief.campaign_hash,
+            'competitors',
+            brief.competitors.map(c => c.name).join('|'),
+          )}
+          feedbackKind="brief_competitors"
+          feedbackParentId={brief.campaign_hash}
+        >
           {brief.competitors.map((c, i) => (
             <CompetitorEditor
               key={i}
@@ -206,7 +239,17 @@ export function StrategyBriefView({
       )}
 
       {brief.whitespace.length > 0 && (
-        <SectionCard title="Whitespace opportunities">
+        <SectionCard
+          title="Whitespace opportunities"
+          feedbackHash={hashContent(
+            'strategist',
+            brief.campaign_hash,
+            'whitespace',
+            brief.whitespace.map(w => w.opportunity).join('|'),
+          )}
+          feedbackKind="brief_whitespace"
+          feedbackParentId={brief.campaign_hash}
+        >
           {brief.whitespace.map((w, i) => (
             <WhiteSpaceEditor
               key={i}
@@ -217,7 +260,18 @@ export function StrategyBriefView({
         </SectionCard>
       )}
 
-      <SectionCard title="Campaign">
+      <SectionCard
+        title="Campaign"
+        feedbackHash={hashContent(
+          'strategist',
+          brief.campaign_hash,
+          'campaign',
+          brief.campaign.objective,
+          brief.campaign.offer_structure,
+        )}
+        feedbackKind="brief_campaign"
+        feedbackParentId={brief.campaign_hash}
+      >
         <SelectField
           label="Objective"
           value={brief.campaign.objective}
@@ -244,7 +298,17 @@ export function StrategyBriefView({
       </SectionCard>
 
       {brief.benchmarks.length > 0 && (
-        <SectionCard title="Channel benchmarks (AI estimate)">
+        <SectionCard
+          title="Channel benchmarks (AI estimate)"
+          feedbackHash={hashContent(
+            'strategist',
+            brief.campaign_hash,
+            'benchmarks',
+            brief.benchmarks.map(b => b.channel).join('|'),
+          )}
+          feedbackKind="brief_benchmarks"
+          feedbackParentId={brief.campaign_hash}
+        >
           <div className="space-y-2">
             {brief.benchmarks.map((b, i) => (
               <BenchmarkRow key={i} bench={b} />
@@ -327,9 +391,15 @@ function ErrorBox({ message }: { readonly message: string }) {
 function SectionCard({
   title,
   children,
+  feedbackHash,
+  feedbackKind,
+  feedbackParentId,
 }: {
   readonly title: string;
   readonly children: React.ReactNode;
+  readonly feedbackHash?: string;
+  readonly feedbackKind?: string;
+  readonly feedbackParentId?: string;
 }) {
   return (
     <section
@@ -340,11 +410,25 @@ function SectionCard({
       }}
     >
       <div
-        className="px-3 py-2 font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3 border-b"
+        className="px-3 py-2 flex items-center justify-between gap-2 border-b"
         style={{ borderColor: 'var(--color-border-faint)' }}
-        lang="th"
       >
-        {title}
+        <span
+          className="font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3"
+          lang="th"
+        >
+          {title}
+        </span>
+        {feedbackHash && feedbackKind && (
+          <FeedbackThumbs
+            target={{
+              contentHash: feedbackHash,
+              role: 'strategist',
+              kind: feedbackKind,
+              parentId: feedbackParentId,
+            }}
+          />
+        )}
       </div>
       <div className="p-3 space-y-3">{children}</div>
     </section>

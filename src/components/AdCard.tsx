@@ -20,6 +20,9 @@ import { PersonaPanelGroup } from './PersonaPanelGroup';
 import { StructureBreakdown } from './StructureBreakdown';
 import { ChannelFitPanel } from './ChannelFitPanel';
 import { CompetitorPanel } from './CompetitorPanel';
+import { StrategyFitPanel } from './StrategyFitPanel';
+import { FeedbackThumbs } from './FeedbackThumbs';
+import { hashContent } from '../lib/feedback';
 import { ImagePreview } from './ImagePreview';
 import { Gauge } from './Gauge';
 import { Radar } from './Radar';
@@ -193,6 +196,14 @@ export function AdCard({
                 <CheckCircle className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
                 Ad copy
               </p>
+              <FeedbackThumbs
+                target={{
+                  contentHash: hashContent('generator', ad.clientId, ad.style, ad.copy),
+                  role: 'generator',
+                  kind: 'ad_copy',
+                  parentId: ad.clientId,
+                }}
+              />
             </div>
             <p
               className="whitespace-pre-wrap text-fg-1 p-4 rounded-md text-sm leading-relaxed border"
@@ -256,6 +267,12 @@ export function AdCard({
                     text={visualPrompt.ai_prompt}
                     copied={copiedIndex === `ai-${idx}`}
                     onCopy={() => onCopy(visualPrompt.ai_prompt, `ai-${idx}`)}
+                    feedbackTarget={{
+                      contentHash: hashContent('visual', ad.clientId, visualPrompt.ai_prompt),
+                      role: 'visual',
+                      kind: 'visual_ai_prompt',
+                      parentId: ad.clientId,
+                    }}
                   />
                   <PromptBlock
                     label="🔍 Canva search keywords"
@@ -321,6 +338,17 @@ export function AdCard({
                   <p className="text-[12.5px] text-fg-2 leading-relaxed mt-3" lang="th">
                     {evaluation.panel_verdict}
                   </p>
+                  <div className="mt-2">
+                    <FeedbackThumbs
+                      hint="Judge"
+                      target={{
+                        contentHash: hashContent('judge', ad.clientId, evaluation.panel_verdict),
+                        role: 'judge',
+                        kind: 'panel_verdict',
+                        parentId: ad.clientId,
+                      }}
+                    />
+                  </div>
                   {evaluation.ensemble && (
                     <div className="mt-3">
                       <EnsembleBadge meta={evaluation.ensemble} />
@@ -394,11 +422,15 @@ export function AdCard({
                   {evaluation.competitor && (
                     <CompetitorPanel comparison={evaluation.competitor} />
                   )}
+                  {evaluation.strategy_fit && (
+                    <StrategyFitPanel strategyFit={evaluation.strategy_fit} />
+                  )}
                   <PersonaPanelGroup
                     personas={evaluation.personas}
                     rewriteStateOf={rewriteStateOf}
                     onRewrite={onRewrite}
                     onCopyRewrite={onCopyRewrite}
+                    parentAdId={ad.clientId}
                   />
                 </div>
               </div>
@@ -416,9 +448,10 @@ interface PromptBlockProps {
   readonly copied: boolean;
   readonly onCopy: () => void;
   readonly toneAccent?: boolean;
+  readonly feedbackTarget?: import('../lib/feedback').FeedbackTarget;
 }
 
-function PromptBlock({ label, text, copied, onCopy, toneAccent }: PromptBlockProps) {
+function PromptBlock({ label, text, copied, onCopy, toneAccent, feedbackTarget }: PromptBlockProps) {
   return (
     <div>
       <div className="flex justify-between items-center mb-1">
@@ -428,18 +461,21 @@ function PromptBlock({ label, text, copied, onCopy, toneAccent }: PromptBlockPro
         >
           {label}
         </p>
-        <button
-          type="button"
-          onClick={onCopy}
-          aria-label="คัดลอก prompt"
-          className="text-fg-3 hover:text-fg-1 inline-flex items-center justify-center min-h-[28px] min-w-[28px] rounded-md transition-colors"
-        >
-          {copied ? (
-            <Check className="w-3 h-3" strokeWidth={1.5} style={{ color: 'var(--color-success)' }} aria-hidden="true" />
-          ) : (
-            <CopyIcon className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
-          )}
-        </button>
+        <div className="flex items-center gap-1">
+          {feedbackTarget && <FeedbackThumbs target={feedbackTarget} />}
+          <button
+            type="button"
+            onClick={onCopy}
+            aria-label="คัดลอก prompt"
+            className="text-fg-3 hover:text-fg-1 inline-flex items-center justify-center min-h-[28px] min-w-[28px] rounded-md transition-colors"
+          >
+            {copied ? (
+              <Check className="w-3 h-3" strokeWidth={1.5} style={{ color: 'var(--color-success)' }} aria-hidden="true" />
+            ) : (
+              <CopyIcon className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+            )}
+          </button>
+        </div>
       </div>
       <p
         className="text-xs text-fg-2 p-2 rounded font-mono leading-relaxed border"

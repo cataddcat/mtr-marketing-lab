@@ -284,6 +284,44 @@ const buildJudgePrompt = (
   const competitorJsonField = competitor
     ? `,\n  "competitor": {"winner": "ours|theirs|tie", "margin": 0, "ours_strengths": ["..."], "theirs_strengths": ["..."], "recommendation": "..."}`
     : '';
+  const strategyFitJsonField = briefBlock
+    ? `,\n  "strategy_fit": {
+    "positioning_score": 0,
+    "positioning_critique": "...",
+    "jtbd_coverage": [
+      {"segment_name": "...", "score": 0, "gap": "..."}
+    ],
+    "whitespace_capture": 0,
+    "whitespace_critique": "...",
+    "benchmark_alignment": {
+      "channel": "facebook_feed",
+      "estimated_ctr_pct": 0.0,
+      "vs_benchmark": "above|on|below",
+      "note": "..."
+    }
+  }`
+    : '';
+  const strategyFitInstructions = briefBlock
+    ? `
+
+═══════════════════════════════════════════════════════════════
+STRATEGY FIT — เนื่องจากมี <STRATEGY_BRIEF> ติดมา ให้ Judge เพิ่มประเมิน strategy_fit ใน output:
+  positioning_score (0-10) : ad เคารพ positioning archetype + value_prop + tone_rules ของ brief แค่ไหน
+                              หัก ถ้าใช้ anti-positioning words; เพิ่ม ถ้าสะท้อน brand_promises ตรง
+  positioning_critique     : 1 ประโยคสั้นๆ ว่าตรงหรือหลุดตรงไหน (ไม่เกิน 240 ตัวอักษร)
+  jtbd_coverage            : per-segment list (ใส่ทุก segment ใน brief — ใช้ชื่อ segment ตรง field "name")
+                              score (0-10) = ad address JTBD + winning_angle + objection ของ segment นั้นแค่ไหน
+                              gap          = ช่องโหว่หลัก (ถ้าคะแนนเต็ม ใส่ "—")
+  whitespace_capture (0-10): ad เล่นมุม whitespace_opportunity ที่ brief เสนอหรือไม่
+                              0 = ซ้ำ positioning คู่แข่ง, 10 = ครอบมุมใหม่ตามคำแนะนำเป๊ะ
+  whitespace_critique      : 1 ประโยค
+  benchmark_alignment      : ดู channel_fit.best แล้วเทียบ CTR ที่คาดกับ benchmark ของ channel นั้นใน brief
+                              channel        = id ของช่อง best
+                              estimated_ctr_pct = ตัวเลข % ที่คาดว่า ad นี้จะทำได้ (ใช้ scroll_stop + hook quality เป็น signal)
+                              vs_benchmark   = 'above' / 'on' / 'below' เทียบกับ p50 ของ benchmark channel นั้น
+                              note           = 1 ประโยคบอกเหตุผล
+ใส่ field "strategy_fit" ใน JSON output ตามรูปแบบด้านล่าง`
+    : '';
   return `คุณคือ Consumer Panel Simulator สำหรับ "ม่านธารา" (ท่าศาลา, ลพบุรี)
 จงสวมบทบาทผู้บริโภค 4 คนนี้พร้อมกัน แต่ละคนเห็นโฆษณานี้ใน feed Facebook/IG/TikTok ขณะอยู่ในบริบทเฉพาะของตัวเอง
 ห้ามให้คะแนน "เฉลี่ยๆ" — ถ้าโฆษณาไม่ตรงกลุ่ม ให้คะแนนต่ำตรงไปตรงมา
@@ -353,6 +391,7 @@ CHANNEL FIT — ประเมินว่า ad นี้เหมาะกั
 ranked = list เรียงจากคะแนนสูงสุดลงต่ำ (ใส่ทั้ง 5 ช่อง)
 best = id ของช่อง top 1
 reasoning = สั้น ๆ ว่าทำไมเลือก best (~80 ตัวอักษร)
+${strategyFitInstructions}
 
 ═══════════════════════════════════════════════════════════════
 บังคับตอบเป็น JSON object รูปแบบนี้เท่านั้น ห้ามมีข้อความอื่นผสม:
@@ -381,7 +420,7 @@ reasoning = สั้น ๆ ว่าทำไมเลือก best (~80 ต�
     {"id": "businessman", "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."},
     {"id": "genz",        "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."}
   ],
-  "average_score": 0.0${competitorJsonField}
+  "average_score": 0.0${competitorJsonField}${strategyFitJsonField}
 }${timeBlock}${nicheBlock}${factsBlock}${quotesBlock}${calibrationBlock}${competitorBlock}${briefBlock}`;
 };
 

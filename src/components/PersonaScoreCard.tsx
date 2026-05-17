@@ -9,6 +9,8 @@ import {
 } from '../lib/schemas';
 import { ScoreBar } from './ScoreBar';
 import { scoreClass, scoreColorVar } from '../lib/score';
+import { FeedbackThumbs } from './FeedbackThumbs';
+import { hashContent } from '../lib/feedback';
 
 export type RewriteState =
   | { status: 'idle' }
@@ -23,6 +25,7 @@ interface Props {
   readonly rewriteState?: RewriteState;
   readonly onRewrite?: () => void;
   readonly onCopyRewrite?: (text: string) => void;
+  readonly parentAdId?: string;
 }
 
 export function PersonaScoreCard({
@@ -32,6 +35,7 @@ export function PersonaScoreCard({
   rewriteState,
   onRewrite,
   onCopyRewrite,
+  parentAdId,
 }: Props) {
   const detailsId = useId();
   const avg = personaAverage(persona);
@@ -91,12 +95,29 @@ export function PersonaScoreCard({
             <p className="text-xs leading-relaxed" style={{ color: 'var(--color-info)' }} lang="th">
               <span className="text-fg-4">แก้ให้โดน:</span> {persona.suggestion}
             </p>
+            <div className="pt-1">
+              <FeedbackThumbs
+                target={{
+                  contentHash: hashContent(
+                    'judge',
+                    parentAdId ?? 'no-ad',
+                    persona.id,
+                    persona.suggestion,
+                  ),
+                  role: 'judge',
+                  kind: 'persona_suggestion',
+                  parentId: parentAdId,
+                }}
+              />
+            </div>
           </div>
           {onRewrite && (
             <RewriteBlock
               state={rewrite}
               onRewrite={onRewrite}
               onCopy={onCopyRewrite}
+              feedbackParentId={parentAdId}
+              personaKey={persona.id}
             />
           )}
         </div>
@@ -109,9 +130,11 @@ interface RewriteBlockProps {
   readonly state: RewriteState;
   readonly onRewrite: () => void;
   readonly onCopy?: (text: string) => void;
+  readonly feedbackParentId?: string;
+  readonly personaKey: string;
 }
 
-function RewriteBlock({ state, onRewrite, onCopy }: RewriteBlockProps) {
+function RewriteBlock({ state, onRewrite, onCopy, feedbackParentId, personaKey }: RewriteBlockProps) {
   if (state.status === 'ready') {
     return (
       <div
@@ -128,14 +151,29 @@ function RewriteBlock({ state, onRewrite, onCopy }: RewriteBlockProps) {
           >
             เวอร์ชันที่แก้แล้ว
           </p>
-          <button
-            type="button"
-            onClick={onRewrite}
-            className="text-[10px] text-fg-3 hover:text-accent inline-flex items-center gap-1 min-h-[28px] transition-colors"
-          >
-            <Sparkles className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
-            ลองอีก
-          </button>
+          <div className="flex items-center gap-1">
+            <FeedbackThumbs
+              target={{
+                contentHash: hashContent(
+                  'rewriter',
+                  feedbackParentId ?? 'no-ad',
+                  personaKey,
+                  state.result.copy,
+                ),
+                role: 'rewriter',
+                kind: 'rewrite_result',
+                parentId: feedbackParentId,
+              }}
+            />
+            <button
+              type="button"
+              onClick={onRewrite}
+              className="text-[10px] text-fg-3 hover:text-accent inline-flex items-center gap-1 min-h-[28px] transition-colors"
+            >
+              <Sparkles className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+              ลองอีก
+            </button>
+          </div>
         </div>
         <p className="text-xs text-fg-1 leading-relaxed whitespace-pre-wrap" lang="th">{state.result.copy}</p>
         <p className="text-[11px] text-fg-3 leading-relaxed" lang="th">

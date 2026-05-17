@@ -84,6 +84,31 @@ export const CompetitorComparisonSchema = v.object({
   recommendation: v.pipe(v.string(), v.maxLength(280)),
 });
 
+export const BenchmarkBucketSchema = v.picklist(['above', 'on', 'below'] as const);
+export type BenchmarkBucket = v.InferOutput<typeof BenchmarkBucketSchema>;
+
+export const JtbdCoverageItemSchema = v.object({
+  segment_name: nonEmpty,
+  score: score,
+  gap: v.pipe(v.string(), v.maxLength(200)),
+});
+
+export const StrategyFitSchema = v.object({
+  positioning_score: score,
+  positioning_critique: v.pipe(v.string(), v.maxLength(240)),
+  jtbd_coverage: v.pipe(v.array(JtbdCoverageItemSchema), v.maxLength(5)),
+  whitespace_capture: score,
+  whitespace_critique: v.pipe(v.string(), v.maxLength(240)),
+  benchmark_alignment: v.object({
+    channel: ChannelIdSchema,
+    estimated_ctr_pct: v.number(),
+    vs_benchmark: BenchmarkBucketSchema,
+    note: v.pipe(v.string(), v.maxLength(200)),
+  }),
+});
+export type JtbdCoverageItem = v.InferOutput<typeof JtbdCoverageItemSchema>;
+export type StrategyFit = v.InferOutput<typeof StrategyFitSchema>;
+
 export const AdEvaluationSchema = v.object({
   panel_verdict: v.pipe(v.string(), v.maxLength(200)),
   trends_used: v.array(v.string()),
@@ -97,6 +122,9 @@ export const AdEvaluationSchema = v.object({
   // Optional comparison block — produced by the LLM only when a competitor
   // ad text is supplied to evaluateAd().
   competitor: v.optional(CompetitorComparisonSchema),
+  // Optional strategy-fit block — produced by the LLM only when a
+  // StrategyBrief is supplied (Track A Phase 2).
+  strategy_fit: v.optional(StrategyFitSchema),
 });
 
 export const VisualPromptSchema = v.object({

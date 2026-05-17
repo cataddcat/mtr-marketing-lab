@@ -8,6 +8,7 @@ interface Props {
   readonly rewriteStateOf?: (personaId: PersonaId) => RewriteState | undefined;
   readonly onRewrite?: (personaId: PersonaId) => void;
   readonly onCopyRewrite?: (text: string) => void;
+  readonly parentAdId?: string;
 }
 
 export function PersonaPanelGroup({
@@ -15,6 +16,7 @@ export function PersonaPanelGroup({
   rewriteStateOf,
   onRewrite,
   onCopyRewrite,
+  parentAdId,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const toggle = useCallback(() => setExpanded(v => !v), []);
@@ -65,6 +67,7 @@ export function PersonaPanelGroup({
             rewriteState={rewriteStateOf?.(p.id)}
             onRewrite={onRewrite ? () => onRewrite(p.id) : undefined}
             onCopyRewrite={onCopyRewrite}
+            parentAdId={parentAdId}
           />
         ))}
       </div>

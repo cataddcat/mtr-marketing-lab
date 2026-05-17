@@ -482,6 +482,23 @@ ${evalData.competitor.theirs_strengths.map(s => `  - ${s}`).join('\n')}
 `
       : '';
 
+    const strategyFitLines = evalData?.strategy_fit
+      ? (() => {
+          const sf = evalData.strategy_fit;
+          const ba = sf.benchmark_alignment;
+          const jtbdLines = sf.jtbd_coverage
+            .map(c => `  - **${c.segment_name}** (${c.score}/10) — gap: ${c.gap || '—'}`)
+            .join('\n');
+          return `\n### 🧭 Strategy fit (per Brief)
+- **Positioning fit:** ${sf.positioning_score}/10 — ${sf.positioning_critique}
+- **Whitespace capture:** ${sf.whitespace_capture}/10 — ${sf.whitespace_critique}
+- **Benchmark alignment:** ${ba.estimated_ctr_pct.toFixed(2)}% CTR on ${ba.channel.replace('_', ' ')} (${ba.vs_benchmark}) — ${ba.note}
+- **JTBD coverage:**
+${jtbdLines || '  - (no segments)'}
+`;
+        })()
+      : '';
+
     const mdContent = `---
 title: "MTR Ad - ${ad.style}"
 date: ${date}
@@ -500,7 +517,7 @@ ${ad.visual_idea}
 
 ## 📊 การประเมิน (The Judge)
 ${verdictLine}**คะแนนเฉลี่ย**: ${scoreText}/10
-${ensembleLine}${trendsLine}${structureLines}${channelLines}${competitorLines}${performanceLines}
+${ensembleLine}${trendsLine}${structureLines}${channelLines}${strategyFitLines}${competitorLines}${performanceLines}
 ${personaLines}
 `;
 
