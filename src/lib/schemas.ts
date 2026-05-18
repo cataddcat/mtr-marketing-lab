@@ -109,6 +109,63 @@ export const StrategyFitSchema = v.object({
 export type JtbdCoverageItem = v.InferOutput<typeof JtbdCoverageItemSchema>;
 export type StrategyFit = v.InferOutput<typeof StrategyFitSchema>;
 
+// ════════════════════════════════════════════════════════════════════
+// Community Simulation (Track E.M2 — Super-Judge)
+// MTR-side aggregated view of a MiroFish run. MiroFish itself stays
+// generic; this shape is the MTR-specific projection of its outputs.
+// ════════════════════════════════════════════════════════════════════
+
+export const SentimentSchema = v.object({
+  positive: v.pipe(v.number(), v.minValue(0), v.maxValue(100)),
+  neutral: v.pipe(v.number(), v.minValue(0), v.maxValue(100)),
+  negative: v.pipe(v.number(), v.minValue(0), v.maxValue(100)),
+});
+
+export const ObjectionItemSchema = v.object({
+  text: v.pipe(v.string(), v.maxLength(180)),
+  count: v.pipe(v.number(), v.minValue(0)),
+});
+
+export const QuoteItemSchema = v.object({
+  persona: v.pipe(v.string(), v.maxLength(60)),
+  text: v.pipe(v.string(), v.maxLength(280)),
+  stance: v.picklist(['positive', 'neutral', 'negative'] as const),
+});
+
+export const CommunitySimConfigSchema = v.object({
+  agent_count: v.pipe(v.number(), v.minValue(1)),
+  rounds: v.pipe(v.number(), v.minValue(1)),
+});
+
+export const CommunitySimSchema = v.object({
+  // External keys for traceability back to MiroFish.
+  sim_id: nonEmpty,
+  project_id: nonEmpty,
+  run_at: nonEmpty, // ISO string
+  config: CommunitySimConfigSchema,
+
+  // Aggregated metrics — what the UI surfaces.
+  sentiment: SentimentSchema,
+  // 0-100 estimated click intent (would-click yes / (yes+no+maybe×0.5))
+  click_intent: v.pipe(v.number(), v.minValue(0), v.maxValue(100)),
+  // 1-5 average trust score
+  trust_score: v.pipe(v.number(), v.minValue(1), v.maxValue(5)),
+  // 0-100 share/forward intent
+  virality_signal: v.pipe(v.number(), v.minValue(0), v.maxValue(100)),
+
+  top_objections: v.pipe(v.array(ObjectionItemSchema), v.maxLength(5)),
+  representative_quotes: v.pipe(v.array(QuoteItemSchema), v.maxLength(6)),
+
+  // Raw counts so the UI can show "based on N agent responses".
+  responses_total: v.pipe(v.number(), v.minValue(0)),
+});
+
+export type Sentiment = v.InferOutput<typeof SentimentSchema>;
+export type ObjectionItem = v.InferOutput<typeof ObjectionItemSchema>;
+export type QuoteItem = v.InferOutput<typeof QuoteItemSchema>;
+export type CommunitySim = v.InferOutput<typeof CommunitySimSchema>;
+export type CommunitySimConfig = v.InferOutput<typeof CommunitySimConfigSchema>;
+
 export const AdEvaluationSchema = v.object({
   panel_verdict: v.pipe(v.string(), v.maxLength(200)),
   trends_used: v.array(v.string()),
@@ -125,6 +182,10 @@ export const AdEvaluationSchema = v.object({
   // Optional strategy-fit block — produced by the LLM only when a
   // StrategyBrief is supplied (Track A Phase 2).
   strategy_fit: v.optional(StrategyFitSchema),
+  // Optional community-sim block — attached after a MiroFish run finishes
+  // (Track E.M2). Never produced by the LLM directly; the judge prompt
+  // *uses* it as additional context but does not emit it.
+  community_sim: v.optional(CommunitySimSchema),
 });
 
 export const VisualPromptSchema = v.object({

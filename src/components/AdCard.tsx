@@ -9,6 +9,7 @@ import {
   Palette,
   TrendingUp,
   Microscope,
+  Users,
 } from 'lucide-react';
 import type { AdIdea, VisualPrompt } from '../services/marketing-agent';
 import type { AdEvaluation, PersonaId } from '../lib/schemas';
@@ -21,6 +22,7 @@ import { StructureBreakdown } from './StructureBreakdown';
 import { ChannelFitPanel } from './ChannelFitPanel';
 import { CompetitorPanel } from './CompetitorPanel';
 import { StrategyFitPanel } from './StrategyFitPanel';
+import { CommunityInsightCard } from './CommunityInsightCard';
 import { FeedbackThumbs } from './FeedbackThumbs';
 import { hashContent } from '../lib/feedback';
 import { ImagePreview } from './ImagePreview';
@@ -48,6 +50,11 @@ interface Props {
   readonly ensembleLoading: boolean;
   readonly ensembleError: string | undefined;
   readonly onRunEnsemble: () => void;
+
+  // Track E.M2 — Super-Judge community simulation
+  readonly communityLoading: boolean;
+  readonly communityError: string | undefined;
+  readonly onRunCommunity: () => void;
 
   readonly copiedIndex: string | null;
   readonly onCopy: (text: string, id: string) => void;
@@ -77,6 +84,9 @@ export function AdCard({
   ensembleLoading,
   ensembleError,
   onRunEnsemble,
+  communityLoading,
+  communityError,
+  onRunCommunity,
   copiedIndex,
   onCopy,
   onSave,
@@ -425,6 +435,65 @@ export function AdCard({
                   {evaluation.strategy_fit && (
                     <StrategyFitPanel strategyFit={evaluation.strategy_fit} />
                   )}
+
+                  {/* Track E.M2 — Community deep-eval (Super-Judge) */}
+                  {evaluation.community_sim ? (
+                    <CommunityInsightCard sim={evaluation.community_sim} />
+                  ) : (
+                    <div
+                      className="rounded-md border p-3 flex items-center justify-between gap-2"
+                      style={{
+                        background: 'var(--color-bg-sunken)',
+                        borderColor: 'var(--color-border-faint)',
+                        borderLeft: '3px dashed var(--color-border)',
+                      }}
+                    >
+                      <div className="min-w-0">
+                        <p
+                          className="font-mono text-[10px] tracking-[0.14em] uppercase text-fg-3 inline-flex items-center gap-1.5"
+                          lang="en"
+                        >
+                          <Users className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+                          Community Deep-Eval
+                        </p>
+                        <p className="text-[11.5px] text-fg-3 leading-relaxed mt-0.5" lang="th">
+                          จำลองชุมชนเสมือนแล้วสัมภาษณ์ agents เพื่อดู sentiment, click intent, ข้อโต้แย้ง
+                        </p>
+                        {communityError && (
+                          <p
+                            className="text-[11px] mt-1.5 flex items-start gap-1"
+                            style={{ color: 'var(--color-danger)' }}
+                            lang="th"
+                          >
+                            <span aria-hidden="true">⚠</span>
+                            <span>{communityError}</span>
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={onRunCommunity}
+                        disabled={communityLoading}
+                        aria-busy={communityLoading}
+                        className="shrink-0 inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 min-h-[32px] rounded-md border transition-colors disabled:opacity-50"
+                        style={{
+                          background: communityLoading
+                            ? 'var(--color-bg-elevated)'
+                            : 'color-mix(in oklch, var(--color-accent) 8%, transparent)',
+                          borderColor: 'color-mix(in oklch, var(--color-accent) 35%, transparent)',
+                          color: 'var(--color-accent)',
+                        }}
+                      >
+                        {communityLoading ? (
+                          <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.5} aria-hidden="true" />
+                        ) : (
+                          <Users className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+                        )}
+                        {communityLoading ? 'Running' : 'Run community sim'}
+                      </button>
+                    </div>
+                  )}
+
                   <PersonaPanelGroup
                     personas={evaluation.personas}
                     rewriteStateOf={rewriteStateOf}

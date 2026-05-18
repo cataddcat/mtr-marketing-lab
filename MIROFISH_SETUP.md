@@ -5,24 +5,23 @@ that simulates communities of LLM agents on Twitter+Reddit-style platforms.
 Use it to predict community reactions to ads, ground Strategy Briefs in
 realistic agent voice, and run iterative optimization loops.
 
-## TL;DR
+## TL;DR (Windows, no Docker required)
 
-```bash
-# 1. Configure MiroFish .env  (LLM API key + Zep Cloud key required)
+```powershell
+# 1. Ensure MiroFish .env has LLM_API_KEY + ZEP_API_KEY filled
 cd D:\_Projects\MiroFish
-cp .env.example .env
-# Edit .env — set LLM_API_KEY and ZEP_API_KEY
+# If .venv missing, run once:  npm run setup:all
+# Requires Python 3.11–3.12 (uv will manage). uv handles the virtualenv.
 
-# 2. Start MiroFish (Docker — easiest)
-docker compose up -d
+# 2. Start MiroFish backend (Flask on :5001)
+npm run backend
 
-# 3. Verify
+# 3. Verify (new terminal)
 curl http://localhost:5001/health
 # → {"status": "ok", "service": "MiroFish Backend"}
 
-# 4. Point MTR at it
-# In d:\_Projects\mtr-marketing-lab\.env:
-VITE_MIROFISH_URL=http://localhost:5001
+# 4. Point MTR at it — add to d:\_Projects\mtr-marketing-lab\.env:
+#    VITE_MIROFISH_URL=http://localhost:5001
 
 # 5. Restart MTR dev server
 cd d:\_Projects\mtr-marketing-lab
@@ -31,6 +30,9 @@ npm run dev
 
 The Fish icon in the MTR header turns on once `VITE_MIROFISH_URL` is set →
 click it to open the Community Simulation panel.
+
+> **Don't have Docker?** That's fine — the source-code option above is the
+> primary path. Docker is just a convenience wrapper. See section 2 for both.
 
 ## 1. MiroFish configuration
 

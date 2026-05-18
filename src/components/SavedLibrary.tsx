@@ -178,7 +178,7 @@ export function SavedLibrary({
                 </IconButton>
                 <IconButton
                   label={`แปลโฆษณาสไตล์ ${it.style}`}
-                  title="แปลเป็น EN / 中文"
+                  title="แปลเป็น EN"
                   onClick={() => onOpenTranslate(it.id)}
                 >
                   <Languages className="w-3.5 h-3.5" strokeWidth={1.5} aria-hidden="true" />

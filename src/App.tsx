@@ -30,14 +30,18 @@ import { useAuth } from './hooks/useAuth';
 import { SignInScreen } from './components/SignInScreen';
 import { useAllFeedback } from './hooks/useFeedback';
 import { ExportPanel } from './components/ExportPanel';
+import { applyDemoBundle, clearDemoBundle, isDemoLoaded } from './lib/demo-data';
 import { TierSwitcher } from './components/TierSwitcher';
 import { useCapability } from './hooks/useCapability';
 import { useTier } from './hooks/useTier';
 import { recordUsage } from './lib/capabilities';
 import { TIER_LABELS } from './lib/capabilities';
 import { CommunitySimulationPanel } from './components/CommunitySimulationPanel';
+import { CommunitySimConfigForm } from './components/CommunitySimConfigForm';
 import { isMiroFishConfigured } from './lib/mirofish-client';
 import { PERSONA_LABELS } from './lib/schemas';
+import type { CommunitySim, CommunitySimConfig } from './lib/schemas';
+import { runCommunitySim, type CommunitySimProgress } from './services/community-sim';
 import { PRODUCT_EXAMPLES, PROMO_EXAMPLES } from './lib/example-prompts';
 import { selectCalibrationExamples } from './lib/calibration';
 
@@ -109,6 +113,15 @@ export default function App() {
   const [rewrites, setRewrites] = useState<Record<string, RewriteState>>({});
   const [ensembleLoading, setEnsembleLoading] = useState<number | null>(null);
   const [ensembleErrors, setEnsembleErrors] = useState<Record<number, string>>({});
+
+  // Track E.M2 — Super-Judge community simulation
+  // Sheet-side state: when a user clicks "Run community sim" on an AdCard we
+  // remember which ad triggered it so the size-picker Sheet knows what to
+  // launch. `running` is keyed by ad index so multiple ads can sim in parallel.
+  const [communityConfigForIdx, setCommunityConfigForIdx] = useState<number | null>(null);
+  const [communityRunning, setCommunityRunning] = useState<Record<number, boolean>>({});
+  const [communityErrors, setCommunityErrors] = useState<Record<number, string>>({});
+  const communityAbortsRef = useRef<Map<number, AbortController>>(new Map());
 
   useEffect(() => {
     const localData = localStorage.getItem('mtr_saved_ads');
@@ -255,6 +268,9 @@ export default function App() {
       return next;
     });
     try {
+      // Preserve community_sim from a prior run if this is a re-evaluation
+      // — the community block is independent of the judge prompt's output.
+      const priorCommunitySim = evaluations[index]?.community_sim ?? null;
       const result = await evaluateAd(ad, controller.signal, {
         trends: trendsRef.current,
         brandFacts: brandFactsApi.facts,
@@ -262,10 +278,14 @@ export default function App() {
         customerQuotes: customerQuotesApi.quotes,
         calibration: calibrationExamples,
         strategyBrief: strategyBriefApi.current,
+        communitySim: priorCommunitySim,
       });
       if (controller.signal.aborted) return;
       if (result) {
-        setEvaluations(prev => ({ ...prev, [index]: result }));
+        // Re-attach the prior community_sim if the new judge result doesn't
+        // carry it (judge prompt never emits the block — it only consumes).
+        const merged = priorCommunitySim ? { ...result, community_sim: priorCommunitySim } : result;
+        setEvaluations(prev => ({ ...prev, [index]: merged }));
       } else {
         setEvalErrors(prev => ({
           ...prev,
@@ -373,6 +393,100 @@ export default function App() {
         ensembleAbortsRef.current.delete(idx);
         setEnsembleLoading(prev => (prev === idx ? null : prev));
       }
+    }
+  };
+
+  // ── Community simulation (Track E.M2 — Super-Judge) ───────────────
+  //
+  // Fire-and-forget pattern:
+  //   1. Sheet collects (agent_count, rounds) — Cat starts it
+  //   2. We close the Sheet immediately + record running[idx]=true
+  //   3. runCommunitySim() drives the MiroFish pipeline; progress callback
+  //      updates a single toast in place. Done → success toast + write
+  //      community_sim onto the ad's evaluation.
+  //
+  // Errors stash into communityErrors[idx] so the AdCard can re-show the
+  // "Run community sim" button with a red hint.
+  const handleOpenCommunityConfig = (idx: number) => {
+    if (communityRunning[idx]) return; // already running for this ad
+    setCommunityErrors(prev => {
+      if (!(idx in prev)) return prev;
+      const next = { ...prev };
+      delete next[idx];
+      return next;
+    });
+    setCommunityConfigForIdx(idx);
+  };
+
+  const handleStartCommunitySim = async (idx: number, ad: AdIdea, config: CommunitySimConfig) => {
+    setCommunityConfigForIdx(null); // close the config Sheet
+    if (!evaluations[idx]) {
+      toast.info('ต้อง Evaluate ก่อนถึงจะรัน community sim ได้');
+      return;
+    }
+
+    communityAbortsRef.current.get(idx)?.abort();
+    const controller = new AbortController();
+    communityAbortsRef.current.set(idx, controller);
+    setCommunityRunning(prev => ({ ...prev, [idx]: true }));
+
+    toast.info(
+      `Community sim เริ่มแล้ว · ${config.agent_count} agents × ${config.rounds} rounds · ad "${ad.style}"`,
+    );
+
+    // Toast API has no update-in-place; spam-avoidance: only notify on
+    // major stage changes (graph_building → sim_running → interviewing).
+    // Other ticks just go to the console for debugging.
+    let lastNotifiedStage: CommunitySimProgress['stage'] | null = null;
+    const onProgress = (p: CommunitySimProgress): void => {
+      console.debug('[community-sim]', p.stage, p.percent, p.message);
+      const milestone: ReadonlyArray<CommunitySimProgress['stage']> = [
+        'sim_running',
+        'interviewing',
+      ];
+      if (milestone.includes(p.stage) && p.stage !== lastNotifiedStage) {
+        lastNotifiedStage = p.stage;
+        toast.info(`Community sim · ${p.message}`);
+      }
+    };
+
+    try {
+      const sim: CommunitySim = await runCommunitySim({
+        ad,
+        config,
+        brandFacts: brandFactsApi.facts,
+        customerQuotes: customerQuotesApi.quotes,
+        onProgress,
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+
+      // Merge community_sim into the ad's evaluation. Use a functional
+      // update so we don't clobber concurrent evaluation edits.
+      setEvaluations(prev => {
+        const existing = prev[idx];
+        if (!existing) return prev;
+        return { ...prev, [idx]: { ...existing, community_sim: sim } };
+      });
+      toast.success(
+        `Community insight พร้อมแล้ว · sentiment +${sim.sentiment.positive}/${sim.sentiment.neutral}/${sim.sentiment.negative}% · click intent ${sim.click_intent}%`,
+      );
+    } catch (err) {
+      if (isAbortError(err)) return;
+      console.error('[community-sim]', err);
+      const msg = errorMessage(err);
+      setCommunityErrors(prev => ({ ...prev, [idx]: msg }));
+      toast.error(`Community sim ล้มเหลว: ${msg}`);
+    } finally {
+      if (communityAbortsRef.current.get(idx) === controller) {
+        communityAbortsRef.current.delete(idx);
+      }
+      setCommunityRunning(prev => {
+        if (!(idx in prev)) return prev;
+        const next = { ...prev };
+        delete next[idx];
+        return next;
+      });
     }
   };
 
@@ -1016,6 +1130,9 @@ ${personaLines}
                         ensembleLoading={ensembleLoading === idx}
                         ensembleError={ensembleErrors[idx]}
                         onRunEnsemble={() => handleRunEnsemble(idx, ad)}
+                        communityLoading={!!communityRunning[idx]}
+                        communityError={communityErrors[idx]}
+                        onRunCommunity={() => handleOpenCommunityConfig(idx)}
                         copiedIndex={copiedIndex}
                         onCopy={handleCopy}
                         onSave={() => handleSaveAd(idx, ad)}
@@ -1034,8 +1151,50 @@ ${personaLines}
 
           {activeTab === 'library' && (
             savedAds.length > 0 ? (
-              <div className="relative" data-dev-code="LIB.SAVED">
+              <div className="relative space-y-3" data-dev-code="LIB.SAVED">
                 <SectionTag code="LIB.SAVED" floating />
+                {isDemoLoaded() && (
+                  <div
+                    className="rounded-md border p-3 flex items-center gap-3"
+                    style={{
+                      background: 'color-mix(in oklch, var(--color-info) 8%, transparent)',
+                      borderColor: 'color-mix(in oklch, var(--color-info) 35%, transparent)',
+                    }}
+                  >
+                    <Sparkles
+                      className="w-4 h-4 shrink-0"
+                      strokeWidth={1.5}
+                      style={{ color: 'var(--color-info)' }}
+                      aria-hidden="true"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className="text-[12px] font-medium leading-snug"
+                        style={{ color: 'var(--color-info)' }}
+                        lang="th"
+                      >
+                        Demo data ที่โหลดไว้ — ทดสอบฟีเจอร์ได้เต็มที่
+                      </p>
+                      <p className="text-[10.5px] text-fg-3 mt-0.5" lang="th">
+                        ลองกด Export · กด Evaluate ใหม่ · เปิด Strategy Brief เพื่อดูตัวอย่าง brief
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!confirm('ลบ demo data และเริ่มจากศูนย์?')) return;
+                        clearDemoBundle();
+                        toast.info('ลบ demo แล้ว — กำลัง refresh');
+                        setTimeout(() => window.location.reload(), 600);
+                      }}
+                      className="shrink-0 text-[11px] min-h-[28px] px-2 rounded-md hover:bg-bg-hover transition-colors"
+                      style={{ color: 'var(--color-fg-3)' }}
+                      lang="th"
+                    >
+                      ลบ demo
+                    </button>
+                  </div>
+                )}
                 <SavedLibrary
                   items={savedAds}
                   headingId={savedHeadingId}
@@ -1050,7 +1209,7 @@ ${personaLines}
             ) : (
               <div
                 role="status"
-                className="relative flex flex-col items-center justify-center border border-dashed border-border rounded-md p-12 text-fg-3 text-sm gap-3"
+                className="relative flex flex-col items-center justify-center border border-dashed border-border rounded-md p-12 text-fg-3 text-sm gap-4"
                 lang="th"
                 data-dev-code="LIB.EMPTY"
               >
@@ -1069,6 +1228,40 @@ ${personaLines}
                     </button>
                     เพื่อสร้างและบันทึกโฆษณาใหม่
                   </p>
+                </div>
+                <div
+                  className="border-t pt-4 mt-2 text-center space-y-2"
+                  style={{ borderColor: 'var(--color-border-faint)' }}
+                >
+                  <p className="text-fg-4 text-[11.5px] leading-relaxed" lang="th">
+                    หรือโหลด <b className="text-fg-2">demo data</b> เพื่อลองเล่นทุก feature ทันที
+                    <br />
+                    (3 saved ads + 1 brief + 4 quotes + performance metrics)
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const summary = applyDemoBundle();
+                      toast.success(
+                        `โหลดแล้ว · ${summary.savedAds} ads · ${summary.briefs} brief · ${summary.quotes} quotes — กำลัง refresh...`,
+                      );
+                      setTimeout(() => window.location.reload(), 800);
+                    }}
+                    className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 min-h-[36px] rounded-md border transition-colors hover:bg-bg-hover"
+                    style={{
+                      borderColor: 'color-mix(in oklch, var(--color-accent) 35%, transparent)',
+                      color: 'var(--color-accent)',
+                      background: 'color-mix(in oklch, var(--color-accent) 8%, transparent)',
+                    }}
+                    lang="th"
+                  >
+                    <Sparkles
+                      className="w-3 h-3"
+                      strokeWidth={1.5}
+                      aria-hidden="true"
+                    />
+                    โหลด demo data (Marnthara sample)
+                  </button>
                 </div>
               </div>
             )
@@ -1109,6 +1302,25 @@ ${personaLines}
           brandFacts={brandFactsApi.facts}
           customerQuotes={customerQuotesApi.quotes}
         />
+      </Sheet>
+
+      {/* Track E.M2 — Sheet for picking sim size before launching */}
+      <Sheet
+        open={communityConfigForIdx !== null}
+        onClose={() => setCommunityConfigForIdx(null)}
+        title="Community deep-eval"
+      >
+        {communityConfigForIdx !== null && ads[communityConfigForIdx] && (
+          <CommunitySimConfigForm
+            ad={ads[communityConfigForIdx]}
+            onCancel={() => setCommunityConfigForIdx(null)}
+            onStart={(config) => {
+              const targetIdx = communityConfigForIdx;
+              const targetAd = ads[targetIdx];
+              if (targetAd) void handleStartCommunitySim(targetIdx, targetAd, config);
+            }}
+          />
+        )}
       </Sheet>
 
       <Sheet

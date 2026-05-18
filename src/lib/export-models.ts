@@ -55,9 +55,9 @@ export const buildAdRows = (
   ads: readonly SavedAdLike[],
   briefs: readonly StrategyBrief[],
 ): AdExportRow[] => {
-  const briefByHash = new Map(briefs.map(b => [b.campaign_hash, b]));
   // Heuristic: until we capture which brief was active at save time, link to
   // the most recently-drafted brief overall (best we can do without metadata).
+  // Future: stamp ad.briefCampaignHash at save time and look up via briefs map.
   const latestBrief = [...briefs].sort((a, b) =>
     b.drafted_at.localeCompare(a.drafted_at),
   )[0];
@@ -73,8 +73,6 @@ export const buildAdRows = (
       ad,
       briefId: latestBrief?.campaign_hash ?? null,
       strongPersonas: strong,
-      // briefByHash kept for future per-ad campaign-hash tagging
-      ...(briefByHash.size === 0 ? {} : {}),
     };
   });
 };

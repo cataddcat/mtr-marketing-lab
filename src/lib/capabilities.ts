@@ -15,6 +15,7 @@ export type Capability =
   | 'vault_sync_full'
   | 'vault_sync_twoway'
   | 'mirofish_export'
+  | 'community_sim_run'      // Track E.M2 — Super-Judge community simulation
   | 'training_export'
   | 'team_workspace';
 
@@ -39,6 +40,9 @@ export const CAPABILITY_MATRIX: CapabilityMatrix = {
     vault_sync_full: false,
     vault_sync_twoway: false,
     mirofish_export: false,
+    // Track E.M2: enabled for all tiers during dev. Gate flips when SaaS
+    // billing turns on.
+    community_sim_run: true,
     training_export: false,
     team_workspace: false,
   },
@@ -53,6 +57,7 @@ export const CAPABILITY_MATRIX: CapabilityMatrix = {
     vault_sync_full: true,
     vault_sync_twoway: false,
     mirofish_export: true,
+    community_sim_run: true,
     training_export: true,
     team_workspace: false,
   },
@@ -67,6 +72,7 @@ export const CAPABILITY_MATRIX: CapabilityMatrix = {
     vault_sync_full: true,
     vault_sync_twoway: true,
     mirofish_export: true,
+    community_sim_run: true,
     training_export: true,
     team_workspace: true,
   },
@@ -84,6 +90,7 @@ export const CAPABILITY_LABELS: Record<Capability, string> = {
   vault_sync_full: 'Vault export ครบ',
   vault_sync_twoway: 'Vault sync 2-way',
   mirofish_export: 'MiroFish boards',
+  community_sim_run: 'Community deep-eval (Super-Judge)',
   training_export: 'Export training data',
   team_workspace: 'Team workspace + invite',
 };

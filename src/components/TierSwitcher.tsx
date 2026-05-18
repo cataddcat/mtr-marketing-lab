@@ -39,7 +39,7 @@ export function TierSwitcher() {
   const { tier, isServerBacked, setTier } = useTier();
   const toast = useToast();
   const [busy, setBusy] = useState<Tier | null>(null);
-  const [interval, setInterval] = useState<'monthly' | 'yearly'>('monthly');
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
   const cfg = billingConfig();
 
   const switchLocal = async (next: Tier) => {
@@ -57,7 +57,7 @@ export function TierSwitcher() {
 
   const handleUpgradePaid = () => {
     const r = startCheckout({
-      interval,
+      interval: billingInterval,
       userEmail: auth.session?.user?.email ?? undefined,
       userId: auth.userId ?? undefined,
     });
@@ -129,9 +129,9 @@ export function TierSwitcher() {
               <div className="font-mono text-base tabular-nums text-fg-1 leading-none">
                 {t === 'paid' ? (
                   <>
-                    ฿{PRICING.paid[interval].toLocaleString('en-US')}
+                    ฿{PRICING.paid[billingInterval].toLocaleString('en-US')}
                     <span className="text-[10px] text-fg-3 font-normal">
-                      /{interval === 'yearly' ? 'ปี' : 'เดือน'}
+                      /{billingInterval === 'yearly' ? 'ปี' : 'เดือน'}
                     </span>
                   </>
                 ) : (
@@ -195,14 +195,14 @@ export function TierSwitcher() {
         <span lang="th">รอบบิล:</span>
         <button
           type="button"
-          onClick={() => setInterval('monthly')}
+          onClick={() => setBillingInterval('monthly')}
           className="px-2 py-1 rounded-pill border transition-colors"
           style={{
             borderColor:
-              interval === 'monthly'
+              billingInterval === 'monthly'
                 ? 'color-mix(in oklch, var(--color-accent) 45%, transparent)'
                 : 'var(--color-border-faint)',
-            color: interval === 'monthly' ? 'var(--color-accent)' : 'var(--color-fg-3)',
+            color: billingInterval === 'monthly' ? 'var(--color-accent)' : 'var(--color-fg-3)',
           }}
           lang="th"
         >
@@ -210,14 +210,14 @@ export function TierSwitcher() {
         </button>
         <button
           type="button"
-          onClick={() => setInterval('yearly')}
+          onClick={() => setBillingInterval('yearly')}
           className="px-2 py-1 rounded-pill border transition-colors"
           style={{
             borderColor:
-              interval === 'yearly'
+              billingInterval === 'yearly'
                 ? 'color-mix(in oklch, var(--color-accent) 45%, transparent)'
                 : 'var(--color-border-faint)',
-            color: interval === 'yearly' ? 'var(--color-accent)' : 'var(--color-fg-3)',
+            color: billingInterval === 'yearly' ? 'var(--color-accent)' : 'var(--color-fg-3)',
           }}
           lang="th"
         >

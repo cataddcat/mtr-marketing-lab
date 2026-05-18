@@ -21,7 +21,7 @@ type State =
   | { status: 'ready'; result: TranslatedAd }
   | { status: 'error'; lang: TargetLanguage; message: string };
 
-const LANGS: readonly TargetLanguage[] = ['en', 'zh'];
+const LANGS: readonly TargetLanguage[] = ['en'];
 
 export function TranslatePanel({ open, onClose, ad, onCopy }: Props) {
   const titleId = useId();

@@ -38,6 +38,7 @@ import {
   isBriefUsable,
   type StrategyBrief,
 } from '../lib/strategy-brief';
+import type { CommunitySim } from '../lib/schemas';
 
 export type { AdEvaluation, VisualPrompt, PersonaEval, PersonaId } from '../lib/schemas';
 export { personaAverage, PERSONA_LABELS } from '../lib/schemas';
@@ -263,6 +264,46 @@ ${competitor.trim()}
 ใส่เพิ่มใน field "competitor" ของ JSON output.`;
 };
 
+const formatCommunitySimForPrompt = (sim: CommunitySim | null): string => {
+  if (!sim) return '';
+  const obj = sim.top_objections
+    .slice(0, 5)
+    .map((o, i) => `  ${i + 1}. (×${o.count}) ${o.text}`)
+    .join('\n');
+  const quotes = sim.representative_quotes
+    .slice(0, 4)
+    .map(q => `  [${q.stance}] "${q.text}"`)
+    .join('\n');
+  return `
+
+═══════════════════════════════════════════════════════════════
+<COMMUNITY_SIM_RESULT>  (Super-Judge: real agents already reacted)
+Sample: ${sim.responses_total} responses · ${sim.config.agent_count} agents × ${sim.config.rounds} rounds
+Sentiment       : positive ${sim.sentiment.positive}% · neutral ${sim.sentiment.neutral}% · negative ${sim.sentiment.negative}%
+Click intent    : ${sim.click_intent}% (yes + 0.5 × maybe)
+Trust score     : ${sim.trust_score.toFixed(1)} / 5
+Virality signal : ${sim.virality_signal}% (would-share=yes)
+
+Top objections from agents:
+${obj || '  (none reported)'}
+
+Representative quotes:
+${quotes || '  (none)'}
+
+⚠️ Use this signal as ground-truth grounding when scoring. If community
+sentiment is mostly negative but a persona would normally rate high,
+that's a red flag — let it pull the persona's confidence and verdict
+toward what the community actually showed. Cite top objections in
+suggestions where relevant.
+═══════════════════════════════════════════════════════════════`;
+};
+
+const hashCommunitySim = (sim: CommunitySim | null): string => {
+  if (!sim) return '';
+  // sim_id is unique per run — enough to invalidate cache.
+  return sim.sim_id;
+};
+
 const buildJudgePrompt = (
   trends: TrendsSnapshot | null,
   brandFacts: readonly BrandFact[],
@@ -270,6 +311,7 @@ const buildJudgePrompt = (
   customerQuotes: readonly CustomerQuote[] = [],
   calibration: readonly CalibrationExample[] = [],
   strategyBrief: StrategyBrief | null = null,
+  communitySim: CommunitySim | null = null,
 ): string => {
   const trendsBlock = buildTrendsBlock(trends);
   const factsBlock = formatBrandFactsForPrompt(brandFacts);
@@ -421,7 +463,7 @@ ${strategyFitInstructions}
     {"id": "genz",        "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."}
   ],
   "average_score": 0.0${competitorJsonField}${strategyFitJsonField}
-}${timeBlock}${nicheBlock}${factsBlock}${quotesBlock}${calibrationBlock}${competitorBlock}${briefBlock}`;
+}${timeBlock}${nicheBlock}${factsBlock}${quotesBlock}${calibrationBlock}${competitorBlock}${briefBlock}${formatCommunitySimForPrompt(communitySim)}`;
 };
 
 export interface EvaluateAdOptions {
@@ -443,6 +485,13 @@ export interface EvaluateAdOptions {
   readonly calibration?: readonly CalibrationExample[];
   /** Strategy Brief — positioning, segments, competitors, benchmarks. */
   readonly strategyBrief?: StrategyBrief | null;
+  /**
+   * Community-sim aggregate result (Track E.M2 — Super-Judge). When
+   * supplied, the Judge prompt gets sentiment + click-intent + objections
+   * as additional grounding context. The judge does NOT emit the
+   * community_sim block; it just consumes it.
+   */
+  readonly communitySim?: CommunitySim | null;
 }
 
 const hashString = (s: string): string => {
@@ -461,6 +510,7 @@ export const evaluateAd = async (
   const customerQuotes = options.customerQuotes ?? [];
   const calibration = options.calibration ?? [];
   const strategyBrief = options.strategyBrief ?? null;
+  const communitySim = options.communitySim ?? null;
   const competitor = options.competitorAd?.trim() ? options.competitorAd.trim() : null;
   const systemPrompt = buildJudgePrompt(
     trends,
@@ -469,6 +519,7 @@ export const evaluateAd = async (
     customerQuotes,
     calibration,
     strategyBrief,
+    communitySim,
   );
 
   const userPrompt = `ประเมินโฆษณาต่อไปนี้:
@@ -480,9 +531,10 @@ export const evaluateAd = async (
   const quotesHash = hashQuotes(customerQuotes);
   const calibHash = hashCalibrationExamples(calibration);
   const briefHash = hashStrategyBrief(strategyBrief);
+  const simHash = hashCommunitySim(communitySim);
   const salt = options.cacheSalt ?? '';
   const compHash = competitor ? hashString(competitor) : '';
-  const cacheKeyData = `${ad.copy}\n${ad.visual_idea}\n${trendsDate}\n${factsHash}\n${quotesHash}\n${calibHash}\n${briefHash}\n${salt}\n${compHash}`;
+  const cacheKeyData = `${ad.copy}\n${ad.visual_idea}\n${trendsDate}\n${factsHash}\n${quotesHash}\n${calibHash}\n${briefHash}\n${simHash}\n${salt}\n${compHash}`;
 
   try {
     return await generateAndExtract({
@@ -746,16 +798,15 @@ feedback จาก "${personaLabel}":
 };
 
 // ════════════════════════════════════════════════════════════════════
-// translateAd — translate the Thai ad copy + visual_idea into another language
-// (English / Chinese) for foreign customers or international portfolio. Style
-// label stays in Thai (it's a brand voice marker, not a translatable string).
+// translateAd — translate the Thai ad copy + visual_idea into English for
+// expat / tourist customers or international portfolio. Style label stays
+// in Thai (it's a brand voice marker, not a translatable string).
 // ════════════════════════════════════════════════════════════════════
 
-export type TargetLanguage = 'en' | 'zh';
+export type TargetLanguage = 'en';
 
 export const LANGUAGE_LABEL: Record<TargetLanguage, string> = {
   en: 'English',
-  zh: '中文 (Mandarin)',
 };
 
 export interface TranslatedAd {
@@ -774,11 +825,9 @@ export const translateAd = async (
   language: TargetLanguage,
   signal?: AbortSignal,
 ): Promise<TranslatedAd | null> => {
-  const langName = language === 'en' ? 'natural conversational English' : 'simplified Mandarin Chinese (简体中文)';
+  const langName = 'natural conversational English';
   const audienceHint =
-    language === 'en'
-      ? 'Target: expat or tourist customers near Lopburi. Keep idiomatic & warm — not corporate.'
-      : 'Target audience: 中国游客或来泰国的中国人. 口语化, 不要正式套话.';
+    'Target: expat or tourist customers near Lopburi. Keep idiomatic & warm — not corporate.';
 
   const systemPrompt = `You translate Thai Facebook/TikTok ads into ${langName} for "ม่านธารา", a curtain shop in Lopburi, Thailand.
 

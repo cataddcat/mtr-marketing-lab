@@ -97,6 +97,9 @@ export interface UseMiroFishSim {
 export const useMiroFishSim = (): UseMiroFishSim => {
   const [state, setState] = useState<SimState>(INITIAL);
   const abortRef = useRef<AbortController | null>(null);
+  // Tracks the latest sim id created in `start` so cancel() can hit the
+  // backend's /stop endpoint even after the local AbortController fires.
+  const activeSimIdRef = useRef<string | null>(null);
 
   useEffect(
     () => () => {
@@ -106,18 +109,26 @@ export const useMiroFishSim = (): UseMiroFishSim => {
   );
 
   const cancel = useCallback(() => {
+    const simId = activeSimIdRef.current;
     abortRef.current?.abort();
     abortRef.current = null;
+    if (simId) {
+      // fire-and-forget: server may take a moment to wind down workers
+      void stopSimulation(simId).catch(err =>
+        console.warn('[useMiroFishSim] backend stop failed', err),
+      );
+    }
     setState(prev =>
       prev.stage === 'sim_done' || prev.stage === 'idle' || prev.stage === 'error'
         ? prev
-        : { ...prev, stage: 'cancelled', message: 'ยกเลิกแล้ว' },
+        : { ...prev, stage: 'cancelled', message: 'ยกเลิกแล้ว — แจ้ง backend ให้หยุดด้วย' },
     );
   }, []);
 
   const reset = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    activeSimIdRef.current = null;
     setState(INITIAL);
   }, []);
 
@@ -203,6 +214,7 @@ ${args.ad.visual_idea}
         signal,
       });
       const simulationId = sim.simulation_id;
+      activeSimIdRef.current = simulationId;
       setState(prev => ({ ...prev, simulationId }));
 
       // ── Stage 4: prepare profiles + poll ───────────────────────────
@@ -264,6 +276,11 @@ ${args.ad.visual_idea}
         message: 'agents กำลังโต้ตอบในชุมชนเสมือน...',
       }));
 
+      // Bounded idle-while-warming-up grace period (engine may report 'idle'
+      // briefly before workers spin up). Past this we give up rather than
+      // looping forever on a silently-crashed runner.
+      const MAX_IDLE_GRACE_TICKS = 8; // 8 × POLL_RUN_MS ≈ 24s
+      let idleTicks = 0;
       while (!signal.aborted) {
         const status = await getRunStatus(simulationId, signal);
         setState(prev => ({
@@ -276,14 +293,25 @@ ${args.ad.visual_idea}
               : prev.message,
         }));
         const r = status.runnerStatus.toLowerCase();
-        if (r === 'finished' || r === 'completed' || r === 'done' || r === 'stopped' || r === 'idle') {
-          if (status.totalActionsCount === 0 && r === 'idle') {
-            // engine hasn't started yet — keep polling briefly
-            await sleep(POLL_RUN_MS, signal);
-            continue;
-          }
+        if (r === 'finished' || r === 'completed' || r === 'done' || r === 'stopped') {
           break;
         }
+        if (r === 'idle') {
+          if (status.totalActionsCount > 0) {
+            // engine finished and returned to idle — treat as done
+            break;
+          }
+          idleTicks += 1;
+          if (idleTicks >= MAX_IDLE_GRACE_TICKS) {
+            throw new Error(
+              'Simulation engine remained idle — agents never produced actions. ตรวจ MiroFish logs.',
+            );
+          }
+          await sleep(POLL_RUN_MS, signal);
+          continue;
+        }
+        // any non-idle activity resets the grace counter
+        idleTicks = 0;
         if (r === 'failed' || r === 'error') {
           throw new Error(`Simulation runner ${r}`);
         }
