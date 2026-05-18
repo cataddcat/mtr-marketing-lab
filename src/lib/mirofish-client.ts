@@ -31,7 +31,7 @@ const EnvelopeOk = <T extends v.GenericSchema>(data: T) =>
 const EnvelopeErr = v.object({
   success: v.literal(false),
   error: v.string(),
-  traceback: v.optional(v.string()),
+  traceback: v.nullish(v.string()),
 });
 
 const unwrap = async <T,>(
@@ -54,7 +54,7 @@ const unwrap = async <T,>(
       errParsed.output.error,
       res.status,
       payload,
-      errParsed.output.traceback,
+      errParsed.output.traceback ?? undefined,
     );
   }
 
@@ -111,7 +111,7 @@ const getRequest = async <T,>(
 
 const HealthSchema = v.object({
   status: v.string(),
-  service: v.optional(v.string()),
+  service: v.nullish(v.string()),
 });
 
 export const healthCheck = async (signal?: AbortSignal): Promise<{ status: string }> => {
@@ -130,14 +130,14 @@ export const healthCheck = async (signal?: AbortSignal): Promise<{ status: strin
 const OntologyResponseSchema = EnvelopeOk(
   v.object({
     project_id: v.string(),
-    project_name: v.optional(v.string()),
+    project_name: v.nullish(v.string()),
     ontology: v.object({
       entity_types: v.array(v.unknown()),
       edge_types: v.array(v.unknown()),
     }),
-    analysis_summary: v.optional(v.string()),
+    analysis_summary: v.nullish(v.string()),
     files: v.array(v.unknown()),
-    total_text_length: v.optional(v.number()),
+    total_text_length: v.nullish(v.number()),
   }),
 );
 
@@ -185,7 +185,7 @@ export const generateOntology = async (params: {
   const env = await unwrap(res, OntologyResponseSchema);
   return {
     projectId: env.data.project_id,
-    projectName: env.data.project_name,
+    projectName: env.data.project_name ?? undefined,
     entityTypeCount: env.data.ontology.entity_types.length,
     edgeTypeCount: env.data.ontology.edge_types.length,
     analysisSummary: env.data.analysis_summary ?? '',
@@ -197,7 +197,7 @@ const BuildGraphResponseSchema = EnvelopeOk(
   v.object({
     project_id: v.string(),
     task_id: v.string(),
-    message: v.optional(v.string()),
+    message: v.nullish(v.string()),
   }),
 );
 
@@ -225,17 +225,19 @@ export const buildGraph = async (params: {
   return { projectId: env.data.project_id, taskId: env.data.task_id };
 };
 
-const TaskSchema = v.object({
+// Use looseObject so extra backend fields (task_type, created_at,
+// updated_at, metadata, progress_detail …) don't trip the parser when
+// the backend evolves. Use v.nullish() instead of v.optional() for
+// fields whose backend value can legitimately be null — Python `None`
+// serialises to JSON `null`, which v.optional() rejects.
+const TaskSchema = v.looseObject({
   task_id: v.string(),
-  // Backend uses 'processing' (not 'running'); see models/task.py TaskStatus.
-  // task_type/created_at/updated_at/metadata/progress_detail are also returned
-  // but the frontend doesn't need them — use looseObject so future backend
-  // additions don't break this client.
+  // Backend's TaskStatus enum (models/task.py) emits 'processing', not 'running'.
   status: v.picklist(['pending', 'processing', 'completed', 'failed'] as const),
-  progress: v.optional(v.number()),
-  message: v.optional(v.string()),
-  result: v.optional(v.unknown()),
-  error: v.optional(v.string()),
+  progress: v.nullish(v.number()),
+  message: v.nullish(v.string()),
+  result: v.nullish(v.unknown()),
+  error: v.nullish(v.string()),
 });
 export type MiroFishTask = v.InferOutput<typeof TaskSchema>;
 
@@ -252,10 +254,10 @@ export const getTaskStatus = async (taskId: string, signal?: AbortSignal): Promi
 
 const ProjectSchema = v.object({
   project_id: v.string(),
-  name: v.optional(v.string()),
-  status: v.optional(v.string()),
-  graph_id: v.optional(v.nullable(v.string())),
-  created_at: v.optional(v.string()),
+  name: v.nullish(v.string()),
+  status: v.nullish(v.string()),
+  graph_id: v.nullish(v.string()),
+  created_at: v.nullish(v.string()),
 });
 export type MiroFishProject = v.InferOutput<typeof ProjectSchema>;
 
@@ -287,12 +289,12 @@ export const getProject = async (projectId: string, signal?: AbortSignal): Promi
 
 const SimulationStateSchema = v.object({
   simulation_id: v.string(),
-  project_id: v.optional(v.string()),
-  graph_id: v.optional(v.string()),
-  status: v.optional(v.string()),
-  enable_twitter: v.optional(v.boolean()),
-  enable_reddit: v.optional(v.boolean()),
-  created_at: v.optional(v.string()),
+  project_id: v.nullish(v.string()),
+  graph_id: v.nullish(v.string()),
+  status: v.nullish(v.string()),
+  enable_twitter: v.nullish(v.boolean()),
+  enable_reddit: v.nullish(v.boolean()),
+  created_at: v.nullish(v.string()),
 });
 export type SimulationState = v.InferOutput<typeof SimulationStateSchema>;
 
@@ -323,10 +325,10 @@ export const createSimulation = async (params: {
 const PrepareResponseSchema = EnvelopeOk(
   v.object({
     simulation_id: v.string(),
-    task_id: v.optional(v.string()),
-    status: v.optional(v.string()),
-    message: v.optional(v.string()),
-    already_prepared: v.optional(v.boolean()),
+    task_id: v.nullish(v.string()),
+    status: v.nullish(v.string()),
+    message: v.nullish(v.string()),
+    already_prepared: v.nullish(v.boolean()),
   }),
 );
 
@@ -362,7 +364,7 @@ export const prepareSimulation = async (params: {
     taskId: env.data.task_id ?? null,
     alreadyPrepared: env.data.already_prepared ?? false,
     status: env.data.status ?? 'unknown',
-    message: env.data.message,
+    message: env.data.message ?? undefined,
   };
 };
 
@@ -370,9 +372,9 @@ const PrepareStatusResponseSchema = EnvelopeOk(
   v.object({
     simulation_id: v.string(),
     status: v.string(),
-    progress: v.optional(v.number()),
-    message: v.optional(v.string()),
-    error: v.optional(v.string()),
+    progress: v.nullish(v.number()),
+    message: v.nullish(v.string()),
+    error: v.nullish(v.string()),
   }),
 );
 
@@ -389,8 +391,11 @@ export const getPrepareStatus = async (
   return {
     status: env.data.status,
     progress: env.data.progress ?? 0,
-    message: env.data.message,
-    error: env.data.error,
+    // Coalesce JSON null → undefined at the client boundary so consumers
+    // see a single "absent" shape regardless of whether the backend
+    // serialised the field as null (Python None) or omitted it.
+    message: env.data.message ?? undefined,
+    error: env.data.error ?? undefined,
   };
 };
 
@@ -398,12 +403,12 @@ const StartSimResponseSchema = EnvelopeOk(
   v.object({
     simulation_id: v.string(),
     runner_status: v.string(),
-    process_pid: v.optional(v.number()),
-    twitter_running: v.optional(v.boolean()),
-    reddit_running: v.optional(v.boolean()),
-    started_at: v.optional(v.string()),
-    graph_memory_update_enabled: v.optional(v.boolean()),
-    force_restarted: v.optional(v.boolean()),
+    process_pid: v.nullish(v.number()),
+    twitter_running: v.nullish(v.boolean()),
+    reddit_running: v.nullish(v.boolean()),
+    started_at: v.nullish(v.string()),
+    graph_memory_update_enabled: v.nullish(v.boolean()),
+    force_restarted: v.nullish(v.boolean()),
   }),
 );
 
@@ -428,25 +433,25 @@ export const startSimulation = async (params: {
     StartSimResponseSchema,
     params.signal,
   );
-  return { runnerStatus: env.data.runner_status, pid: env.data.process_pid };
+  return { runnerStatus: env.data.runner_status, pid: env.data.process_pid ?? undefined };
 };
 
 const RunStatusResponseSchema = EnvelopeOk(
   v.object({
     simulation_id: v.string(),
     runner_status: v.string(),
-    current_round: v.optional(v.number()),
-    total_rounds: v.optional(v.number()),
-    progress_percent: v.optional(v.number()),
-    simulated_hours: v.optional(v.number()),
-    total_simulation_hours: v.optional(v.number()),
-    twitter_running: v.optional(v.boolean()),
-    reddit_running: v.optional(v.boolean()),
-    twitter_actions_count: v.optional(v.number()),
-    reddit_actions_count: v.optional(v.number()),
-    total_actions_count: v.optional(v.number()),
-    started_at: v.optional(v.string()),
-    updated_at: v.optional(v.string()),
+    current_round: v.nullish(v.number()),
+    total_rounds: v.nullish(v.number()),
+    progress_percent: v.nullish(v.number()),
+    simulated_hours: v.nullish(v.number()),
+    total_simulation_hours: v.nullish(v.number()),
+    twitter_running: v.nullish(v.boolean()),
+    reddit_running: v.nullish(v.boolean()),
+    twitter_actions_count: v.nullish(v.number()),
+    reddit_actions_count: v.nullish(v.number()),
+    total_actions_count: v.nullish(v.number()),
+    started_at: v.nullish(v.string()),
+    updated_at: v.nullish(v.string()),
   }),
 );
 
@@ -509,23 +514,23 @@ export const stopSimulation = async (
 // ════════════════════════════════════════════════════════════════════
 
 const PostSchema = v.looseObject({
-  post_id: v.optional(v.union([v.string(), v.number()])),
-  user_id: v.optional(v.union([v.string(), v.number()])),
-  content: v.optional(v.string()),
-  num_likes: v.optional(v.number()),
-  num_dislikes: v.optional(v.number()),
-  num_shares: v.optional(v.number()),
-  created_at: v.optional(v.string()),
+  post_id: v.nullish(v.union([v.string(), v.number()])),
+  user_id: v.nullish(v.union([v.string(), v.number()])),
+  content: v.nullish(v.string()),
+  num_likes: v.nullish(v.number()),
+  num_dislikes: v.nullish(v.number()),
+  num_shares: v.nullish(v.number()),
+  created_at: v.nullish(v.string()),
 });
 export type MiroFishPost = v.InferOutput<typeof PostSchema>;
 
 const PostsResponseSchema = EnvelopeOk(
   v.object({
-    platform: v.optional(v.string()),
-    total: v.optional(v.number()),
+    platform: v.nullish(v.string()),
+    total: v.nullish(v.number()),
     count: v.number(),
     posts: v.array(PostSchema),
-    message: v.optional(v.string()),
+    message: v.nullish(v.string()),
   }),
 );
 
@@ -549,12 +554,12 @@ export const getPosts = async (params: {
 };
 
 const CommentSchema = v.looseObject({
-  comment_id: v.optional(v.union([v.string(), v.number()])),
-  post_id: v.optional(v.union([v.string(), v.number()])),
-  user_id: v.optional(v.union([v.string(), v.number()])),
-  content: v.optional(v.string()),
-  num_likes: v.optional(v.number()),
-  created_at: v.optional(v.string()),
+  comment_id: v.nullish(v.union([v.string(), v.number()])),
+  post_id: v.nullish(v.union([v.string(), v.number()])),
+  user_id: v.nullish(v.union([v.string(), v.number()])),
+  content: v.nullish(v.string()),
+  num_likes: v.nullish(v.number()),
+  created_at: v.nullish(v.string()),
 });
 export type MiroFishComment = v.InferOutput<typeof CommentSchema>;
 
@@ -590,10 +595,10 @@ export const getComments = async (params: {
 
 const InterviewResponseSchema = EnvelopeOk(
   v.object({
-    agent_id: v.optional(v.union([v.string(), v.number()])),
-    prompt: v.optional(v.string()),
+    agent_id: v.nullish(v.union([v.string(), v.number()])),
+    prompt: v.nullish(v.string()),
     result: v.unknown(),
-    timestamp: v.optional(v.string()),
+    timestamp: v.nullish(v.string()),
   }),
 );
 
@@ -627,16 +632,16 @@ export const interviewAgent = async (params: {
   );
   return {
     agentId: env.data.agent_id ?? params.agentId,
-    prompt: env.data.prompt,
+    prompt: env.data.prompt ?? undefined,
     result: env.data.result,
-    timestamp: env.data.timestamp,
+    timestamp: env.data.timestamp ?? undefined,
   };
 };
 
 const InterviewAllResponseSchema = EnvelopeOk(
   v.object({
-    interviews_count: v.optional(v.number()),
-    results: v.optional(v.array(v.unknown())),
+    interviews_count: v.nullish(v.number()),
+    results: v.nullish(v.array(v.unknown())),
   }),
 );
 

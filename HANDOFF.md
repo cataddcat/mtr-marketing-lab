@@ -359,6 +359,55 @@ that aren't picklisted (e.g. `runner_status`, `prepare_status`) use
 plain `v.string()` so they tolerate backend evolution — that pattern
 should be the default; picklists only when the enum is locked.
 
+#### 🐛 Schema mismatch fix #2 — `v.optional` vs `v.nullish` (2026-05-19)
+
+Immediately after the `'processing'` fix above shipped, the same
+endpoint failed again. The new picklist accepted `'processing'` fine,
+but Valibot rejected the response on a different field.
+
+Captured payload during a live build (graph build task at 24% progress):
+```json
+{
+  "task_id": "4a87...",
+  "status": "processing",
+  "progress": 24,
+  "message": "Sending batch 1/5 (3 chunks)...",
+  "result": null,        ← Python Optional[Dict] = None
+  "error": null,         ← Python Optional[str] = None
+  ...
+}
+```
+
+The original schema declared `result: v.optional(v.unknown())` and
+`error: v.optional(v.string())`. The trap: Valibot's `v.optional()`
+means **"this key may be MISSING (undefined)"**, NOT "this value may
+be null." Python `None` serialises to JSON `null`, the key IS present,
+and `v.string()` rejects `null` as a wrong type.
+
+The right primitive is `v.nullish(SCHEMA)` = "missing OR null OR
+matches SCHEMA." Bulk-renamed all `v.optional(v.string())` /
+`v.optional(v.number())` / `v.optional(v.boolean())` /
+`v.optional(v.union(...))` / `v.optional(v.array(...))` in
+`src/lib/mirofish-client.ts` to their `v.nullish(...)` counterparts
+(28 fields across 12 schemas).
+
+Side effect: TypeScript types now widen to `string | null | undefined`
+at the schema layer. The client-boundary helpers (`prepareSimulation`,
+`startSimulation`, `interviewAgent`, `generateOntology`, the
+`MiroFishError` constructor) coalesce `null → undefined` with
+`value ?? undefined` so consumers see a single "absent" shape.
+
+Verified with a standalone valibot test harness using the real
+captured payload + 3 edge cases — all parse cleanly. Build clean
+(823 KB).
+
+Lesson: when typing a JSON response from a Python backend, **default
+to `v.nullish` for every Pydantic/dataclass `Optional[X]` field**.
+Reserve `v.optional` for fields the backend genuinely *omits* from
+the response (rare — most Python serialisers include every field).
+For any new MiroFish endpoint added to `mirofish-client.ts`,
+follow this convention up front so the schema doesn't reject reality.
+
 #### ⚡ One-command launcher — `npm run all` (2026-05-19)
 
 For the "Option 1 — use locally" workflow chosen after the production
