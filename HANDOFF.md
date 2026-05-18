@@ -408,6 +408,109 @@ the response (rare — most Python serialisers include every field).
 For any new MiroFish endpoint added to `mirofish-client.ts`,
 follow this convention up front so the schema doesn't reject reality.
 
+#### 🔧 MTR Cloudflare Worker — add Together AI as last-resort (2026-05-19)
+
+The MTR proxy worker (`mtr-marketing-lab-proxy.cataddcat.workers.dev`)
+served `/chat`, `/judge`, `/trends`, `/image`. Its provider chain was
+just `groq → sambanova`. When Cat hit the Groq TPD limit + SambaNova
+rate-limit simultaneously (which happened mid-session 2026-05-19),
+the worker returned 502 with `Both providers failed. groq: ... |
+sambanova: ...` and `evaluateAd()` died. **No Together AI fallback
+existed in the worker** — only MiroFish had Together as a fourth pool
+member. Same root cause as the MiroFish work earlier, different code
+path.
+
+Fix in `d:\_Projects\mtr-marketing-lab\proxy\src\index.ts`:
+- Hard-coded `GROQ_URL/MODEL` + `SAMBANOVA_URL/MODEL` constants and the
+  two-step `callPrimaryWithFallback` replaced with a single ordered
+  `PROVIDER_POOL` array and a generic `callPoolWithFallback` that walks
+  it. Adding a fourth/fifth provider later is now a one-line edit to
+  the array.
+- New entry at the end of the pool:
+  `{ name: 'together', url: 'https://api.together.xyz/v1/chat/completions',
+    model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+    envKey: 'TOGETHER_API_KEY', tier: 'paid' }`
+  — same key Cat is already using on MiroFish.
+- `Env.TOGETHER_API_KEY` is **optional** in the interface. The worker
+  filters the pool to only providers with a configured key, so a
+  worker with TOGETHER_API_KEY unset stays a 2-provider pool exactly
+  as before. No regression risk for the deployed instance until Cat
+  runs `wrangler secret put TOGETHER_API_KEY`.
+- Error message format changed from "Both providers failed" to
+  "All N provider(s) failed" — the frontend log shows a clean per-
+  provider error map.
+- `wrangler.toml` comments updated to document the new optional secret
+  + the cost-aware pool order.
+
+Verified locally: `tsc --noEmit` clean, `wrangler deploy --dry-run`
+bundles cleanly to 13.18 KiB (4.18 KiB gzip).
+
+**Cat's deploy steps**:
+```powershell
+cd d:\_Projects\mtr-marketing-lab\proxy
+
+# 1. Add the Together secret (paste the same key as MiroFish .env)
+npx wrangler secret put TOGETHER_API_KEY
+
+# 2. Deploy
+npx wrangler deploy
+```
+
+The deployed URL stays `mtr-marketing-lab-proxy.cataddcat.workers.dev`
+— no `VITE_AI_PROXY_URL` change needed on Vercel.
+
+When Groq's daily TPD resets at midnight UTC (≈ 07:00 Bangkok), the
+pool will already prefer Groq again — Together stays untouched as
+long as a free provider has quota.
+
+#### 🗑️ Track D2 removed — single-tier "super power user" mode (2026-05-19)
+
+Cat's directive: *"หน้าต่าง Strategy Brief กับ Plan & Billing ชนกันเด้ง
+เพราะฉะนั้นผมจะตัดระบบ Plan & Billing ออกให้เราเป็น Super power user
+เท่านั้น เพราะนี่คือแอพที่เราจะใช้เอง"*
+
+The tier/billing/capability system was originally Track D2 — a Free /
+BYOK / Paid SaaS gate with daily-limit counters, Stripe Payment Links,
+and an in-app "Plan & Billing" sheet. Cat has decided this app is for
+internal use only; no users to bill, no need for gating. Two sheets
+were also racing each other (Strategy Brief vs Plan & Billing) which
+made the decision easy.
+
+Files removed:
+- `src/components/TierSwitcher.tsx`
+- `src/components/UpsellChip.tsx`
+- `src/hooks/useTier.ts`
+- `src/hooks/useCapability.ts`
+- `src/lib/capabilities.ts` (CAPABILITY_MATRIX, GateState, daily usage counter)
+- `src/services/billing.ts` (Stripe Payment Links flow)
+- `STRIPE_SETUP.md`
+
+`src/App.tsx` cleanup:
+- Removed `tierPanelOpen` state + `<Sheet>` for "Plan & Billing"
+- Removed header pill button that opened the sheet
+- Removed `useTier()` + two `useCapability(...)` calls
+- Removed daily-limit toast + redirect in `handleGenerate` /
+  `handleGenerateBrief` / `handleRegenerateBrief`
+- Removed `recordUsage(...)` calls (3 sites)
+- Removed `generateGate.used/limit` counter UI from the Generate button
+
+`src/lib/auth-client.ts` left alone — the `Tier` type + `tier`/
+`tier_changed_at`/`stripe_*`/`byok_provider_keys`/`feature_overrides`
+columns in the `Profile` type still mirror the Supabase migration
+schema (those columns continue to exist in the DB; the app just
+doesn't read or write them anymore). If Cat ever wants to fully
+purge the DB schema, write a follow-up migration that drops those
+columns — but it's safe to leave them as zombie data.
+
+`.env.example` had its `VITE_STRIPE_*` block removed.
+
+Build impact: `npm run build` clean, bundle shrunk **823 KB → 808 KB**
+(-14 KB minified, -1.6 KB after gzip).
+
+Track D in §1 status table is now: D1 ✅ (Supabase auth — kept,
+useful for multi-device sync), D2 ❌ removed, D3/D4 cancelled
+(no SaaS planned).
+
 #### ⚡ One-command launcher — `npm run all` (2026-05-19)
 
 For the "Option 1 — use locally" workflow chosen after the production

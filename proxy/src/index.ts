@@ -5,6 +5,7 @@ import { generateImage, type ImageRequest } from './image';
 export interface Env {
   GROQ_API_KEY: string;
   SAMBANOVA_API_KEY: string;
+  TOGETHER_API_KEY?: string;
   ALLOWED_ORIGIN?: string;
   TRENDS_KV?: KVNamespace;
   JUDGE_KV?: KVNamespace;
@@ -22,12 +23,31 @@ interface ChatCompletionResponse {
   choices?: Array<{ message?: { content?: string } }>;
 }
 
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const SAMBANOVA_URL = 'https://api.sambanova.ai/v1/chat/completions';
-const GROQ_MODEL = 'llama-3.3-70b-versatile';        // primary — ~220 tok/s
-const SAMBANOVA_MODEL = 'Meta-Llama-3.3-70B-Instruct'; // fallback — more reliable, slower
+// ── Provider pool ──────────────────────────────────────────────────
+// Ordered free-first, paid-last (mirrors MiroFish's cost-aware pool).
+// Adding a new provider: define name+url+model+envKey here, then run
+// `wrangler secret put <envKey>` once.
+type ProviderName = 'groq' | 'sambanova' | 'together';
 
-type Provider = 'groq' | 'sambanova';
+interface ProviderConfig {
+  readonly name: ProviderName;
+  readonly url: string;
+  readonly model: string;
+  readonly envKey: keyof Env;
+  readonly tier: 'free' | 'paid';
+}
+
+const PROVIDER_POOL: readonly ProviderConfig[] = [
+  // Free, fastest cold-start (~220 tok/s) — primary
+  { name: 'groq', url: 'https://api.groq.com/openai/v1/chat/completions',
+    model: 'llama-3.3-70b-versatile', envKey: 'GROQ_API_KEY', tier: 'free' },
+  // Free, more reliable but slower — first fallback
+  { name: 'sambanova', url: 'https://api.sambanova.ai/v1/chat/completions',
+    model: 'Meta-Llama-3.3-70B-Instruct', envKey: 'SAMBANOVA_API_KEY', tier: 'free' },
+  // Paid ($5 free credit then $0.88/M) — last-resort emergency
+  { name: 'together', url: 'https://api.together.xyz/v1/chat/completions',
+    model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', envKey: 'TOGETHER_API_KEY', tier: 'paid' },
+];
 
 class ProviderError extends Error {
   readonly status?: number;
@@ -105,50 +125,42 @@ function isTransientFailure(err: unknown): boolean {
 
 interface ChatResult {
   content: string;
-  provider: Provider;
-  groqError?: string;
-  sambanovaError?: string;
+  provider: ProviderName;
+  errors: Readonly<Record<string, string>>;
 }
 
-async function callPrimaryWithFallback(env: Env, body: ChatRequest): Promise<ChatResult> {
-  if (!env.GROQ_API_KEY && !env.SAMBANOVA_API_KEY) {
-    throw new ProviderError('No provider API keys configured');
+// Walk the pool in order. Skip providers without a configured key, and
+// fall through on transient failures (4xx >= 429 or 5xx). A hard 4xx
+// (e.g. malformed request, 401 invalid key) short-circuits because the
+// next provider would just fail the same way.
+async function callPoolWithFallback(env: Env, body: ChatRequest): Promise<ChatResult> {
+  const configured = PROVIDER_POOL.filter(p => Boolean(env[p.envKey]));
+  if (configured.length === 0) {
+    throw new ProviderError('No provider API keys configured (set GROQ_API_KEY, SAMBANOVA_API_KEY, or TOGETHER_API_KEY)');
   }
 
-  let groqError: string | undefined;
-
-  if (env.GROQ_API_KEY) {
+  const errors: Record<string, string> = {};
+  for (const p of configured) {
     try {
-      const content = await callProvider(GROQ_URL, env.GROQ_API_KEY, GROQ_MODEL, body);
-      return { content, provider: 'groq' };
+      const apiKey = env[p.envKey] as string;
+      const content = await callProvider(p.url, apiKey, p.model, body);
+      return { content, provider: p.name, errors };
     } catch (err) {
-      groqError = err instanceof Error ? err.message : String(err);
+      const msg = err instanceof Error ? err.message : String(err);
+      errors[p.name] = msg;
       if (!isTransientFailure(err)) {
-        throw new ProviderError(`Primary (groq) failed: ${groqError}`);
+        // Permanent failure (e.g. 400 bad request) — try the next provider
+        // anyway since requests are simple; their interpretation might differ.
+        continue;
       }
+      // Transient — fall through to next provider.
     }
   }
 
-  if (!env.SAMBANOVA_API_KEY) {
-    throw new ProviderError(
-      `Primary failed and fallback unavailable. groq: ${groqError ?? 'no key'}`,
-    );
-  }
-
-  try {
-    const content = await callProvider(
-      SAMBANOVA_URL,
-      env.SAMBANOVA_API_KEY,
-      SAMBANOVA_MODEL,
-      body,
-    );
-    return { content, provider: 'sambanova', groqError };
-  } catch (err) {
-    const sambanovaError = err instanceof Error ? err.message : String(err);
-    throw new ProviderError(
-      `Both providers failed. groq: ${groqError ?? 'no key'} | sambanova: ${sambanovaError}`,
-    );
-  }
+  const summary = Object.entries(errors)
+    .map(([name, msg]) => `${name}: ${msg}`)
+    .join(' | ');
+  throw new ProviderError(`All ${configured.length} provider(s) failed. ${summary}`);
 }
 
 async function handleChat(
@@ -175,7 +187,7 @@ async function handleChat(
   }
 
   try {
-    const result = await callPrimaryWithFallback(env, body);
+    const result = await callPoolWithFallback(env, body);
     return jsonResponse({ content: result.content, provider: result.provider }, 200, headers);
   } catch (err) {
     return jsonResponse(
@@ -219,7 +231,7 @@ async function handleJudge(
   }
 
   try {
-    const result = await callPrimaryWithFallback(env, {
+    const result = await callPoolWithFallback(env, {
       systemPrompt: body.systemPrompt,
       userPrompt: body.userPrompt,
     });

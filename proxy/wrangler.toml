@@ -3,8 +3,13 @@ main = "src/index.ts"
 compatibility_date = "2025-11-01"
 
 # Secrets (DO NOT commit values; use `wrangler secret put`):
-#   npx wrangler secret put GROQ_API_KEY
-#   npx wrangler secret put SAMBANOVA_API_KEY
+#   npx wrangler secret put GROQ_API_KEY        # required — primary
+#   npx wrangler secret put SAMBANOVA_API_KEY   # required — first fallback
+#   npx wrangler secret put TOGETHER_API_KEY    # optional — paid last-resort
+#
+# Provider pool order (free first, paid last) is defined in src/index.ts
+# PROVIDER_POOL. Skip TOGETHER_API_KEY entirely and the worker still works;
+# add it when the free providers' TPD limits become a regular problem.
 #
 # Optional non-secret vars (uncomment to restrict CORS):
 # [vars]

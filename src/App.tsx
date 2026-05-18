@@ -31,11 +31,6 @@ import { SignInScreen } from './components/SignInScreen';
 import { useAllFeedback } from './hooks/useFeedback';
 import { ExportPanel } from './components/ExportPanel';
 import { applyDemoBundle, clearDemoBundle, isDemoLoaded } from './lib/demo-data';
-import { TierSwitcher } from './components/TierSwitcher';
-import { useCapability } from './hooks/useCapability';
-import { useTier } from './hooks/useTier';
-import { recordUsage } from './lib/capabilities';
-import { TIER_LABELS } from './lib/capabilities';
 import { CommunitySimulationPanel } from './components/CommunitySimulationPanel';
 import { CommunitySimConfigForm } from './components/CommunitySimConfigForm';
 import { isMiroFishConfigured } from './lib/mirofish-client';
@@ -70,7 +65,6 @@ export default function App() {
   const [quotesPanelOpen, setQuotesPanelOpen] = useState(false);
   const [briefPanelOpen, setBriefPanelOpen] = useState(false);
   const [exportPanelOpen, setExportPanelOpen] = useState(false);
-  const [tierPanelOpen, setTierPanelOpen] = useState(false);
   const [communityPanelOpen, setCommunityPanelOpen] = useState(false);
   const [communityTargetAdIndex, setCommunityTargetAdIndex] = useState<number | null>(null);
   const [quotesActivePersona, setQuotesActivePersona] = useState<PersonaId>('family_man');
@@ -157,15 +151,6 @@ export default function App() {
 
   const handleGenerate = async () => {
     if (!product) return;
-    if (!generateGate.allowed) {
-      toast.info(
-        generateGate.limit
-          ? `Free tier: ${generateGate.used}/${generateGate.limit} ต่อวัน — upgrade เพื่อสร้างเพิ่ม`
-          : 'Tier ปัจจุบันไม่อนุญาตให้สร้าง ad — upgrade ก่อน',
-      );
-      setTierPanelOpen(true);
-      return;
-    }
 
     generateAbortRef.current?.abort();
     const controller = new AbortController();
@@ -207,7 +192,6 @@ export default function App() {
         setGenerateError('The AI returned no usable ad ideas. Try rewording your input.');
       } else {
         setExpanded(0); // auto-expand the first variation per HANDOFF Step 4
-        recordUsage('generate_ad');
       }
     } catch (err) {
       if (isAbortError(err)) return;
@@ -227,31 +211,11 @@ export default function App() {
   };
 
   const handleGenerateBrief = async () => {
-    if (!briefGate.allowed) {
-      toast.info(
-        briefGate.limit
-          ? `Free tier: ${briefGate.used}/${briefGate.limit} brief/วัน — upgrade เพื่อร่างเพิ่ม`
-          : 'Tier ปัจจุบันไม่อนุญาตให้ร่าง brief',
-      );
-      setTierPanelOpen(true);
-      return;
-    }
     await strategyBriefApi.generate();
-    if (strategyBriefApi.error === null) recordUsage('brief_generate');
   };
 
   const handleRegenerateBrief = async () => {
-    if (!briefGate.allowed) {
-      toast.info(
-        briefGate.limit
-          ? `Free tier: ${briefGate.used}/${briefGate.limit} brief/วัน — upgrade เพื่อร่างเพิ่ม`
-          : 'Tier ปัจจุบันไม่อนุญาตให้ร่าง brief',
-      );
-      setTierPanelOpen(true);
-      return;
-    }
     await strategyBriefApi.regenerate();
-    if (strategyBriefApi.error === null) recordUsage('brief_generate');
   };
 
   const handleEvaluate = async (index: number, ad: AdIdea) => {
@@ -712,10 +676,6 @@ ${personaLines}
   const activeQuotes = customerQuotesApi.quotes.filter(q => q.enabled && q.quote.trim().length > 0).length;
   const calibrationExamples = selectCalibrationExamples(savedAds);
   const feedbackRecords = useAllFeedback();
-  const { tier } = useTier();
-  const generateGate = useCapability('generate_ad');
-  const briefGate = useCapability('brief_generate');
-
   // Auth gate (Track D1). When Supabase is not configured, auth.status is
   // 'disabled' and we render the app as before (local-only mode).
   if (auth.status === 'loading') {
@@ -809,35 +769,6 @@ ${personaLines}
               aria-label="Export Obsidian vault"
             >
               <FolderTree className="w-4 h-4" strokeWidth={1.5} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setTierPanelOpen(true)}
-              className="font-mono text-[10.5px] tracking-[0.10em] uppercase px-2 py-1 min-h-[28px] rounded-pill border transition-colors hover:bg-bg-hover"
-              style={{
-                background:
-                  tier === 'paid'
-                    ? 'color-mix(in oklch, var(--color-accent) 14%, transparent)'
-                    : tier === 'byok'
-                      ? 'color-mix(in oklch, var(--color-info) 12%, transparent)'
-                      : 'var(--color-bg-sunken)',
-                borderColor:
-                  tier === 'paid'
-                    ? 'color-mix(in oklch, var(--color-accent) 45%, transparent)'
-                    : tier === 'byok'
-                      ? 'color-mix(in oklch, var(--color-info) 40%, transparent)'
-                      : 'var(--color-border-faint)',
-                color:
-                  tier === 'paid'
-                    ? 'var(--color-accent)'
-                    : tier === 'byok'
-                      ? 'var(--color-info)'
-                      : 'var(--color-fg-2)',
-              }}
-              title={`Tier: ${TIER_LABELS[tier]} — คลิกเพื่อเปลี่ยน`}
-              aria-label={`Tier ปัจจุบัน ${TIER_LABELS[tier]}`}
-            >
-              {TIER_LABELS[tier]}
             </button>
             {auth.status === 'signed-in' && auth.session?.user && (
               <div className="inline-flex items-center gap-2">
@@ -966,14 +897,6 @@ ${personaLines}
                   )}
                   {loading ? 'Processing...' : 'Generate Ads'}
                 </span>
-                {generateGate.limit !== null && (
-                  <span
-                    className="font-mono text-[10px] tracking-[0.10em] uppercase tabular-nums opacity-80"
-                    title="ใช้ไปแล้ว / โควต้าต่อวัน"
-                  >
-                    {generateGate.used}/{generateGate.limit} วันนี้
-                  </span>
-                )}
               </button>
             </div>
           </div>
@@ -1292,14 +1215,6 @@ ${personaLines}
           onResetAll={brandFactsApi.resetAll}
           onResetField={brandFactsApi.resetField}
         />
-      </Sheet>
-
-      <Sheet
-        open={tierPanelOpen}
-        onClose={() => setTierPanelOpen(false)}
-        title="Plan & Billing"
-      >
-        <TierSwitcher />
       </Sheet>
 
       <Sheet
