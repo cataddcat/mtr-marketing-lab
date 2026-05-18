@@ -14,6 +14,7 @@ import {
 import type { AdIdea, VisualPrompt } from '../services/marketing-agent';
 import type { AdEvaluation, PersonaId } from '../lib/schemas';
 import { PERSONA_LABELS, personaAverage } from '../lib/schemas';
+import { isMiroFishConfigured } from '../lib/mirofish-client';
 import type { RewriteState } from './PersonaScoreCard';
 import { InlineError } from './InlineError';
 import { EnsembleBadge } from './EnsembleBadge';
@@ -436,63 +437,88 @@ export function AdCard({
                     <StrategyFitPanel strategyFit={evaluation.strategy_fit} />
                   )}
 
-                  {/* Track E.M2 — Community deep-eval (Super-Judge) */}
+                  {/* Track E.M2 — Community deep-eval (Super-Judge).
+                      MiroFish is a localhost backend by default; on a
+                      deployed build (Vercel) VITE_MIROFISH_URL is empty,
+                      so the button stays visible for discoverability
+                      but is disabled with a clear "not configured" hint
+                      instead of crashing inside the Sheet. */}
                   {evaluation.community_sim ? (
                     <CommunityInsightCard sim={evaluation.community_sim} />
-                  ) : (
-                    <div
-                      className="rounded-md border p-3 flex items-center justify-between gap-2"
-                      style={{
-                        background: 'var(--color-bg-sunken)',
-                        borderColor: 'var(--color-border-faint)',
-                        borderLeft: '3px dashed var(--color-border)',
-                      }}
-                    >
-                      <div className="min-w-0">
-                        <p
-                          className="font-mono text-[10px] tracking-[0.14em] uppercase text-fg-3 inline-flex items-center gap-1.5"
-                          lang="en"
-                        >
-                          <Users className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
-                          Community Deep-Eval
-                        </p>
-                        <p className="text-[11.5px] text-fg-3 leading-relaxed mt-0.5" lang="th">
-                          จำลองชุมชนเสมือนแล้วสัมภาษณ์ agents เพื่อดู sentiment, click intent, ข้อโต้แย้ง
-                        </p>
-                        {communityError && (
-                          <p
-                            className="text-[11px] mt-1.5 flex items-start gap-1"
-                            style={{ color: 'var(--color-danger)' }}
-                            lang="th"
-                          >
-                            <span aria-hidden="true">⚠</span>
-                            <span>{communityError}</span>
-                          </p>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={onRunCommunity}
-                        disabled={communityLoading}
-                        aria-busy={communityLoading}
-                        className="shrink-0 inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 min-h-[32px] rounded-md border transition-colors disabled:opacity-50"
+                  ) : (() => {
+                    const miroFishReady = isMiroFishConfigured();
+                    const disabled = communityLoading || !miroFishReady;
+                    return (
+                      <div
+                        className="rounded-md border p-3 flex items-center justify-between gap-2"
                         style={{
-                          background: communityLoading
-                            ? 'var(--color-bg-elevated)'
-                            : 'color-mix(in oklch, var(--color-accent) 8%, transparent)',
-                          borderColor: 'color-mix(in oklch, var(--color-accent) 35%, transparent)',
-                          color: 'var(--color-accent)',
+                          background: 'var(--color-bg-sunken)',
+                          borderColor: 'var(--color-border-faint)',
+                          borderLeft: '3px dashed var(--color-border)',
                         }}
                       >
-                        {communityLoading ? (
-                          <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.5} aria-hidden="true" />
-                        ) : (
-                          <Users className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
-                        )}
-                        {communityLoading ? 'Running' : 'Run community sim'}
-                      </button>
-                    </div>
-                  )}
+                        <div className="min-w-0">
+                          <p
+                            className="font-mono text-[10px] tracking-[0.14em] uppercase text-fg-3 inline-flex items-center gap-1.5"
+                            lang="en"
+                          >
+                            <Users className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+                            Community Deep-Eval
+                          </p>
+                          <p className="text-[11.5px] text-fg-3 leading-relaxed mt-0.5" lang="th">
+                            จำลองชุมชนเสมือนแล้วสัมภาษณ์ agents เพื่อดู sentiment, click intent, ข้อโต้แย้ง
+                          </p>
+                          {!miroFishReady && (
+                            <p
+                              className="text-[11px] mt-1.5 flex items-start gap-1 text-fg-4"
+                              lang="th"
+                            >
+                              <span aria-hidden="true">●</span>
+                              <span>
+                                ฟีเจอร์นี้ใช้ได้เฉพาะ local dev (ต้องรัน MiroFish backend ที่{' '}
+                                <code className="font-mono text-[10.5px]">localhost:5001</code>) —
+                                ไม่ทำงานบน production build
+                              </span>
+                            </p>
+                          )}
+                          {miroFishReady && communityError && (
+                            <p
+                              className="text-[11px] mt-1.5 flex items-start gap-1"
+                              style={{ color: 'var(--color-danger)' }}
+                              lang="th"
+                            >
+                              <span aria-hidden="true">⚠</span>
+                              <span>{communityError}</span>
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={onRunCommunity}
+                          disabled={disabled}
+                          aria-busy={communityLoading}
+                          title={!miroFishReady ? 'MiroFish ไม่ได้ตั้งค่า (VITE_MIROFISH_URL)' : undefined}
+                          className="shrink-0 inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 min-h-[32px] rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{
+                            background: disabled
+                              ? 'var(--color-bg-elevated)'
+                              : 'color-mix(in oklch, var(--color-accent) 8%, transparent)',
+                            borderColor: miroFishReady
+                              ? 'color-mix(in oklch, var(--color-accent) 35%, transparent)'
+                              : 'var(--color-border)',
+                            color: miroFishReady ? 'var(--color-accent)' : 'var(--color-fg-3)',
+                          }}
+                        >
+                          {communityLoading ? (
+                            <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.5} aria-hidden="true" />
+                          ) : (
+                            <Users className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+                          )}
+                          {communityLoading ? 'Running' : !miroFishReady ? 'Unavailable' : 'Run community sim'}
+                        </button>
+                      </div>
+                    );
+                  })()}
 
                   <PersonaPanelGroup
                     personas={evaluation.personas}

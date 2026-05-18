@@ -409,6 +409,16 @@ export default function App() {
   // "Run community sim" button with a red hint.
   const handleOpenCommunityConfig = (idx: number) => {
     if (communityRunning[idx]) return; // already running for this ad
+    // Defensive guard — AdCard already disables the button when
+    // MiroFish isn't configured, but bail with a clear toast instead
+    // of letting a stray click reach runCommunitySim() and throw deep
+    // inside the service.
+    if (!isMiroFishConfigured()) {
+      toast.info(
+        'Community sim ใช้ได้เฉพาะ local dev — ตั้ง VITE_MIROFISH_URL และรัน MiroFish backend',
+      );
+      return;
+    }
     setCommunityErrors(prev => {
       if (!(idx in prev)) return prev;
       const next = { ...prev };
