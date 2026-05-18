@@ -325,6 +325,77 @@ Cell RC  Recovery — restart Ollama + tunnel + new URL
 The obsolete `D:\_Projects\MiroFish\kaggle_cell2_fix.py` is removed —
 its content is now Cell 2 of the canonical file.
 
+#### 🐛 Schema mismatch fix — `TaskSchema.status` allowed value (2026-05-19)
+
+While testing the freshly-shipped `npm run all` flow, Cat clicked
+"Run community sim" on an ad. Cell stages reached `graph_building`,
+then frontend threw:
+
+```
+[mirofish] schema mismatch [...]
+MiroFishError: MiroFish response did not match schema
+  at unwrap (mirofish-client.ts:71)
+  at getTaskStatus (mirofish-client.ts:241)
+  at runCommunitySim (community-sim.ts:349)
+```
+
+Root cause: `mirofish-client.ts` `TaskSchema.status` was a `picklist`
+hardcoded to `['pending', 'running', 'completed', 'failed']`, but the
+MiroFish backend's `TaskStatus` enum in
+`D:\_Projects\MiroFish\backend\app\models\task.py` uses `'processing'`
+for in-progress work (not `'running'`). Valibot rejected the response
+as soon as the graph-build task transitioned out of `'pending'`.
+
+Fix: change the picklist to match backend reality:
+`['pending', 'processing', 'completed', 'failed']`. The downstream
+consumer code (`community-sim.ts`, `useMiroFishSim.ts`) only ever
+checks `=== 'completed'` and `=== 'failed'` so no other call site
+needed updating.
+
+Lesson: when binding a frontend type to a backend Python enum, copy
+the *values* (`.value` of `str`-Enum members), not the developer's
+intuition about what those values are. Future MiroFish status fields
+that aren't picklisted (e.g. `runner_status`, `prepare_status`) use
+plain `v.string()` so they tolerate backend evolution — that pattern
+should be the default; picklists only when the enum is locked.
+
+#### ⚡ One-command launcher — `npm run all` (2026-05-19)
+
+For the "Option 1 — use locally" workflow chosen after the production
+Community-Sim graceful-degrade fix: instead of opening three terminals
+(one for `mtr npm run dev`, one for `mirofish npm run backend`, one
+for `mirofish npm run frontend`), MTR's `package.json` now has:
+
+```json
+"all": "concurrently --kill-others-on-fail --names mtr,mirofish --prefix-colors blue.bold,green.bold \"npm run dev\" \"npm --prefix D:/_Projects/MiroFish run dev\""
+```
+
+Cat starts everything with:
+```powershell
+cd d:\_Projects\mtr-marketing-lab
+npm run all
+```
+
+What this launches (3 services on 3 ports, all in one terminal):
+- `mtr` (blue) → Vite dev server on `:5173`
+- `mirofish` (green) → which itself uses `concurrently` to run
+  - Flask backend on `:5001`
+  - Vue frontend on `:3000`
+
+`--kill-others-on-fail`: if any of the three dies, the launcher kills
+the rest. No orphan processes left over after Ctrl+C.
+
+Bonus shortcut also added:
+```json
+"mirofish": "npm --prefix D:/_Projects/MiroFish run dev"
+```
+Use `npm run mirofish` from MTR to start only MiroFish (without
+launching MTR's Vite) — useful when you want to run MTR somewhere
+else (e.g. deployed Vercel build) and only need MiroFish locally.
+
+Verified 2026-05-19: all three ports came up within 25s and returned
+HTTP 200. `concurrently` added to MTR `devDependencies`.
+
 **Operator note (root cause of the 2026-05-19 `gaierror`)**: Cat hit
 `gaierror: Name or service not known` from Cell 6's smoke test and we
 initially suspected Bug 11 (DNS race) returning. Cat then identified

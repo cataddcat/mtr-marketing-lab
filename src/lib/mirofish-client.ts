@@ -227,7 +227,11 @@ export const buildGraph = async (params: {
 
 const TaskSchema = v.object({
   task_id: v.string(),
-  status: v.picklist(['pending', 'running', 'completed', 'failed'] as const),
+  // Backend uses 'processing' (not 'running'); see models/task.py TaskStatus.
+  // task_type/created_at/updated_at/metadata/progress_detail are also returned
+  // but the frontend doesn't need them — use looseObject so future backend
+  // additions don't break this client.
+  status: v.picklist(['pending', 'processing', 'completed', 'failed'] as const),
   progress: v.optional(v.number()),
   message: v.optional(v.string()),
   result: v.optional(v.unknown()),

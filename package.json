@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "all": "concurrently --kill-others-on-fail --names mtr,mirofish --prefix-colors blue.bold,green.bold \"npm run dev\" \"npm --prefix D:/_Projects/MiroFish run dev\"",
+    "mirofish": "npm --prefix D:/_Projects/MiroFish run dev",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -26,6 +28,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^9.2.1",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
