@@ -209,6 +209,143 @@ add `"th"` entry to `languages.json` with `"llmInstruction": "OUTPUT
 LANGUAGE RULE — STRICT: respond in Thai..."`, then either change the
 default in `locale.py` or have the frontend send `Accept-Language: th`.
 
+#### ✅ Bonus fix #3 — Decouple UI locale from LLM output language (2026-05-19)
+
+Cat observed Chinese still leaking through MiroFish UI + agent debate
+text even after Bonus fix #1 (default `zh → en`). Root cause was that
+**one** locale variable controlled BOTH:
+1. UI strings via `t()` (the navigation chrome, button labels)
+2. LLM prompt directive via `get_language_instruction()` (report bodies +
+   agent simulation chatter + ontology titles)
+
+Cat wants those decoupled: English menus for the operator + Thai
+content for the Marnthara use case. Implementation:
+
+- `D:\_Projects\MiroFish\locales\languages.json` — added `"th"` entry
+  with a strict 4-sentence Thai directive that mirrors the English one's
+  forcefulness ("คุณต้องเขียนคำตอบทั้งหมดเป็นภาษาไทยเท่านั้น ... กฎนี้
+  สำคัญที่สุดและทับซ้อนคำสั่งอื่นทั้งหมด.")
+- `D:\_Projects\MiroFish\backend\app\utils\locale.py` —
+  `get_language_instruction()` now reads `os.environ['LLM_OUTPUT_LANG']`
+  first, falls back to the UI locale, then to `'en'`. UI-bound code
+  (`t()`, `get_locale()`) is untouched.
+- `D:\_Projects\MiroFish\frontend\src\i18n\index.js` — savedLocale
+  default `'zh' → 'en'`, fallbackLocale same. localStorage override
+  still respected so an existing user with Chinese preference saved
+  stays on Chinese.
+- `D:\_Projects\MiroFish\.env` — added `LLM_OUTPUT_LANG=th` near the
+  cooldown-tuning block (commented out alternatives explained inline).
+
+Verified 2026-05-19 03:30 via `diag_thai.py`:
+- `get_locale()` returns `'en'` (UI stays English)
+- `LLM_OUTPUT_LANG=th` flows through
+- Active directive starts with `"OUTPUT LANGUAGE RULE — STRICT: คุณต้อง
+  เขียนคำตอบทั้งหมดเป็นภาษาไทย..."`
+- Live LLM call (Groq, 2.2s) returned a 2-sentence Thai description with
+  zero Chinese / English characters mixed in
+
+What this does NOT fix:
+- Hardcoded Chinese in Vue templates of upstream MiroFish (e.g.
+  `Step4Report.vue` regex parses Chinese keywords like `### 【关键事实】`
+  out of report markdown). The new Thai prompts will make reports emit
+  Thai headings, so that parser will silently fail to extract anything
+  for those sections — but the raw markdown text itself displays in
+  Thai. Worth a follow-up if Cat wants those "extracted sub-sections"
+  to render correctly in the report tabs.
+- The simulation `run_*.py` subprocess scripts use camel-ai directly
+  and may not pick up `LLM_OUTPUT_LANG`. If agent debates still come out
+  Chinese, the next fix is to plumb `LLM_OUTPUT_LANG` into the
+  subprocess env in `simulation_runner.py`.
+
+#### 🛡️ Policy guardrail — no new Chinese in code (2026-05-19)
+
+After Bonus fix #3, Cat asked for prevention rather than retroactive
+cleanup: *"ผมไม่สน log เก่าๆ จะเป็นภาษาอะไร แต่ต่อไปผมไม่เอาภาษาจีน"*.
+Two layers of enforcement now in place:
+
+**1. AI agent memory** — `feedback_no_chinese_in_new_code.md` instructs
+future Claude sessions to write English for all new logger calls,
+comments, docstrings, identifiers, and exception messages. Existing
+Chinese is left alone unless explicitly asked.
+
+**2. Git pre-commit hook** — `D:\_Projects\MiroFish\.githooks\pre-commit`
+- Activated by `git -C D:/_Projects/MiroFish config core.hooksPath .githooks`
+- For every staged file matching `.(py|js|ts|tsx|jsx|vue|md|sh|yml|yaml)$`,
+  pulls the staged diff and rejects the commit if any ADDED line
+  contains a CJK unified ideograph (`[一-鿿]`)
+- Allowlisted: `locales/zh.json` (translation file, intentional Chinese)
+- Override: `git commit --no-verify` (only when truly intentional)
+- Smoke-tested with both negative (English-only addition → exit 0) and
+  positive (Chinese addition → exit 1, blocks with file:line report)
+
+Why this matters: log aggregation tools (Datadog, ELK, grep workflows)
+all assume English. Mixed-language logs break tooling and become
+unreadable to anyone outside the Chinese-reading team. The hook fences
+the policy at the commit boundary without requiring a sweep of the
+~190 legacy hardcoded Chinese logger lines.
+
+#### 🧹 Standardisation — `kaggle_setup_v2.py` v3 (2026-05-19)
+
+After live troubleshooting, the Kaggle bootstrap notebook had drifted:
+PowerShell-style escapes mixed with `!magic` commands, hardcoded
+`/usr/local/bin/ollama` paths even after Cell 2 introduced `OLLAMA_BIN`,
+constants scattered across cells, and Recovery code living in a
+separate file Cat had to remember to paste. v3 consolidates everything
+into a single file with explicit cell boundaries.
+
+Standardisation rules applied:
+- **Cell 0** holds every tunable constant (MODEL, OLLAMA_HOST, OLLAMA_PORT,
+  KEEPALIVE_INTERVAL_SEC, TUNNEL_URL_PATTERN, API_KEY_PLACEHOLDER). Other
+  cells reference these — no hardcoded values anywhere else.
+- **Each cell imports what it uses.** Jupyter cells should be re-runnable
+  in isolation after a kernel restart; re-imports are cheap.
+- **One I/O style:** `get_ipython().system(...)` everywhere. No `!magic`.
+- **English print messages.** Operational notes that need translation
+  stay in code comments where the policy hook ignores them.
+- **One source for the ollama binary path** (`OLLAMA_BIN` from Cell 2).
+  Cell 3 + Cell RC reuse it instead of hardcoding.
+- **Cell 6 emits BOTH the PowerShell one-liner AND the manual 3-line
+  paste** so the operator picks whichever fits their environment.
+- **Cell RC (Recovery)** lives in the same file with its own header,
+  flagged as "run only when something dies mid-session, don't replay 1-7".
+
+Cell layout:
+```
+Cell 0   Config + constants (run once; safe to re-run after edits)
+Cell 1   GPU sanity check
+Cell 2   Install + start Ollama
+Cell 3   Pull MODEL (self-heals if Ollama died)
+Cell 4   Warm up (load weights into VRAM)
+Cell 5   Install cloudflared + start Quick Tunnel
+Cell 6   Smoke-test + emit one-liner / manual paste block
+Cell 7   Keep-alive thread + background status (returns immediately)
+Cell RC  Recovery — restart Ollama + tunnel + new URL
+```
+
+The obsolete `D:\_Projects\MiroFish\kaggle_cell2_fix.py` is removed —
+its content is now Cell 2 of the canonical file.
+
+**Operator note (root cause of the 2026-05-19 `gaierror`)**: Cat hit
+`gaierror: Name or service not known` from Cell 6's smoke test and we
+initially suspected Bug 11 (DNS race) returning. Cat then identified
+the actual cause: they had pasted the entire `kaggle_setup_v2.py` file
+into a single Kaggle cell, which executed Cells 5/6/7 back-to-back
+inside one Python statement chain — Cell 6 fired before cloudflared
+had even finished registering the subdomain. Reverting Cell 5 and
+Cell 6 to the clean v3 versions (no DNS retry stacking) and re-pasting
+each block into its own Jupyter cell resolved it.
+
+To prevent this from recurring, the file now opens with a prominent
+ASCII-box "HOW TO USE THIS FILE" banner that says: "This is a CELL
+MAP, not a runnable script — each `# CELL X` block goes into its own
+Jupyter cell." That warning is the first thing anyone reading the
+file will see.
+
+Bug 11 itself still exists as a real race condition; if it surfaces
+again on a properly-cell-split notebook, the response is to run
+**Cell RC** (which has the full DNS + handshake retry stack), not to
+inline that logic into the happy path.
+
 #### ✅ Bonus fix #2 — Cost-aware pool order
 
 Cat raised: "ถ้า Groq+SambaNova rate-limit บ่อย ทำไมไม่ใช้ Kaggle ก่อน?
