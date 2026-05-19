@@ -88,6 +88,16 @@ export interface RunCommunitySimArgs {
 // ════════════════════════════════════════════════════════════════════
 // Seed-text builder
 // ════════════════════════════════════════════════════════════════════
+//
+// Design goals for the seed:
+//   1. Give MiroFish enough community structure to extract 4-6 distinct
+//      entity types — each maps to a different agent profile type.
+//   2. Describe social edges (who talks to whom) so the graph has
+//      meaningful connections rather than isolated nodes.
+//   3. Include purchase-decision psychology per group so agents respond
+//      realistically to the ad (price sensitivity, trust signals, etc.).
+//   4. Keep the ad itself at the end so every agent "sees" it as a
+//      social-media post appearing in their feed.
 
 const buildSeedText = (
   ad: AdIdea,
@@ -96,23 +106,86 @@ const buildSeedText = (
 ): string => {
   const factsBlock = brandFacts
     .filter(f => f.enabled && f.value.trim())
-    .map(f => `${f.label}: ${f.value}`)
+    .map(f => `• ${f.label}: ${f.value}`)
     .join('\n');
+
   const quotesBlock = customerQuotes
     .filter(q => q.enabled && q.quote.trim())
     .map(q => `[${q.persona}] "${q.quote}"${q.context ? ` (${q.context})` : ''}`)
     .join('\n\n');
 
-  return `=== Marnthara ม่านธารา — ร้านม่านในลพบุรี ===
+  return `\
+=== ชุมชนจำลอง: ตลาดม่านและการตกแต่งบ้าน ลพบุรี-สิงห์บุรี-อ่างทอง ===
 
-${factsBlock || '(ไม่มี brand facts)'}
+── สภาพแวดล้อมตลาด ──
+พื้นที่: จังหวัดลพบุรีและอำเภอใกล้เคียง (สิงห์บุรี, อ่างทอง, อยุธยา) ภาคกลางตอนบน
+ภูมิอากาศ: ร้อนแล้ง 9-10 เดือน/ปี แสงแดด UV สูง ม่านเสื่อมสภาพเร็วถ้าคุณภาพต่ำ
+เศรษฐกิจ: เมืองราชการ-เกษตร-ท่องเที่ยวประวัติศาสตร์ กลุ่มรายได้หลัก middle income
+ตลาด home improvement: เติบโตหลังโควิด ผู้คนใช้เวลาที่บ้านนานขึ้น ลงทุนตกแต่งมากขึ้น
+จุดซื้อหลัก: ร้านในตัวเมืองลพบุรี + Facebook marketplace + Line@ ร้านค้า
+ช่วง high season: ม.ค.-ก.พ. (ปีใหม่-บ้านใหม่), เม.ย. (ก่อนหน้าร้อน), พ.ย.-ธ.ค. (ลดราคาปลายปี)
+
+── 5 กลุ่มผู้บริโภคหลักในชุมชน ──
+
+1. พ่อบ้าน-แม่บ้านเจ้าของบ้านเดี่ยว (อายุ 35-55 ปี)
+   รายได้ครัวเรือน: 40,000-80,000 บาท/เดือน | เป็นเจ้าของบ้านเดี่ยว/ทาวน์เฮาส์
+   ลำดับการตัดสินใจ: ทนทาน-คุ้มค่า > ราคา > ความสวย
+   ตัดสินใจร่วมกันสองคน ต้องการใบเสนอราคาชัดเจนก่อนตกลง
+   ข้อกังวลหลัก: ช่างไม่ตรงเวลา, งานสะดุด, ต้องซ่อมซ้ำภายในปีแรก
+   พฤติกรรมสื่อ: Facebook feed เช้า-เย็น, LINE กลุ่มหมู่บ้าน, YouTube รีวิวสินค้า
+   เส้นทางซื้อ: เห็น ad → ดูรีวิว → ถามเพื่อนบ้าน → นัดดูหน้างาน → ตัดสินใจ (1-4 สัปดาห์)
+
+2. แม่บ้านดูแลบ้าน-homemaker (อายุ 30-50 ปี)
+   รายได้ครัวเรือน: 25,000-55,000 บาท/เดือน | อยู่บ้าน ดูแลลูก-ครัวเรือนเป็นหลัก
+   ลำดับการตัดสินใจ: ความสวย > ดูแลง่าย > ราคา (สามีมักตามที่เลือก)
+   เป็น influencer หลักในบ้าน แชร์รูปผลงานหลังติดตั้งสม่ำเสมอ
+   ข้อกังวลหลัก: ผ้าซีดเร็ว, ซักลำบาก, แสงส่องทำให้ห้องร้อน, เด็กแพ้ฝุ่น
+   พฤติกรรมสื่อ: Facebook Groups (บ้านสวย, แม่บ้าน), TikTok ไอเดียตกแต่ง, Instagram
+   เส้นทางซื้อ: เห็นรูป before-after → ถามกลุ่ม → นัดร้าน → เลือกผ้าตัวอย่าง (1-2 สัปดาห์)
+
+3. เจ้าของธุรกิจ-SME ในพื้นที่ (อายุ 35-60 ปี)
+   ประเภท: ร้านค้า, คาเฟ่, โรงแรมขนาดเล็ก, คลินิก, ออฟฟิศ สำนักงาน
+   รายได้ธุรกิจ: 80,000-500,000 บาท/เดือน | สั่งงานหลายห้องพร้อมกัน
+   ลำดับการตัดสินใจ: ดูมืออาชีพ > ตรงเวลา > ราคา (ต้องการใบกำกับภาษี)
+   ข้อกังวลหลัก: ล่าช้ากระทบธุรกิจ, ราคารวมเปลี่ยน, ไม่มี credit term
+   พฤติกรรมสื่อ: Facebook กลุ่มธุรกิจ-ผู้ประกอบการ, Line@ ร้านค้า, Google search
+   เส้นทางซื้อ: ค้นหาออนไลน์ → โทร/Line สอบถาม → ขอใบเสนอราคา → ตัดสินใจเร็ว (2-7 วัน)
+
+4. คนรุ่นใหม่เช่าคอนโด-หอพัก (อายุ 20-35 ปี)
+   ประเภท: นักศึกษา, พนักงานเอกชน, ข้าราชการรุ่นใหม่ ย้ายมาทำงาน/เรียน
+   รายได้: 12,000-35,000 บาท/เดือน | เช่า studio-1BR ในตัวเมือง
+   ลำดับการตัดสินใจ: ราคา > ความสวย > ติดตั้งง่าย (ไม่ต้องขออนุญาตมาก)
+   ข้อกังวลหลัก: ราคาเกินงบ, ต้องขออนุญาตเจ้าของห้อง, ย้ายแล้วเอาติดไปไม่ได้
+   พฤติกรรมสื่อ: TikTok, Instagram, X/Twitter, Google, ถาม Facebook กลุ่มคนลพบุรี
+   เส้นทางซื้อ: เห็น content → เช็คราคาทันที → ถามเพื่อน → ซื้อเลย (1-3 วัน ถ้าราคาโอเค)
+
+5. ผู้รับเหมา-ช่างตกแต่งบ้าน (อายุ 30-55 ปี)
+   บทบาท: รับงานรีโนเวท-ตกแต่งบ้านในลพบุรีและจังหวัดใกล้เคียง
+   เป็น B2B influencer สำคัญ — แนะนำร้านม่านให้ลูกค้าตรงๆ เลย
+   ลำดับการตัดสินใจ: คุณภาพสม่ำเสมอ > ตรงเวลา > ราคาส่ง (ต้องการ credit/ราคาพิเศษ)
+   ข้อกังวลหลัก: ของส่งช้า ทำให้งานสะดุด, คุณภาพไม่สม่ำเสมอ, ไม่มีใบกำกับภาษี
+   พฤติกรรมสื่อ: LINE กลุ่มช่าง-ผู้รับเหมา, Facebook กลุ่มช่าง, ปากต่อปากในวงการ
+   เส้นทางซื้อ: ลองงานหนึ่งชิ้น → ถ้าดีสั่งซ้ำประจำ + แนะนำลูกค้าต่อ
+
+── โครงสร้างความสัมพันธ์ทางสังคม ──
+• เพื่อนบ้านในหมู่บ้านเดียวกัน → แชร์ประสบการณ์ผ่าน LINE กลุ่มหมู่บ้าน (กลุ่มละ 50-200 คน)
+• กลุ่ม Facebook "บ้านสวยลพบุรี / ซื้อขายลพบุรี" ~3,000-10,000 คน — แม่บ้านถามรีวิวบ่อย
+• กลุ่ม PTA โรงเรียน / กลุ่มออกกำลังกาย — แม่บ้านแนะนำร้านกันในกลุ่มนี้
+• กลุ่ม LINE ช่าง-ผู้รับเหมา — ช่างแนะนำซัพพลายเออร์ที่เชื่อถือได้ให้กัน
+• คนรุ่นใหม่ใช้ Google + TikTok ก่อน แล้วถามกลุ่ม Facebook คนลพบุรี
+
+── ปัจจัยที่มีผลต่อการตัดสินใจซื้อ (ตามลำดับความสำคัญ) ──
+ทุกกลุ่ม: (1) ราคาชัดเจน ไม่บวกเพิ่มทีหลัง  (2) รีวิวจากคนรู้จักหรือในพื้นที่  (3) ดูตัวอย่างผ้าจริง
+เฉพาะกลุ่ม: ทนแดด (บ้านเดี่ยว), ทำความสะอาดง่าย (แม่บ้าน), ใบกำกับ+ตรงเวลา (SME), ราคา+ภาพสวย (GenZ)
+
+── trigger ที่ทำให้ซื้อ ──
+ย้ายบ้านใหม่, ม่านเก่าชำรุด/ซีด, เห็น before-after ของเพื่อน, โปรลด, ลูกแพ้ฝุ่น, รีโนเวทบ้าน
+
+=== ข้อมูลแบรนด์ ม่านธารา ===
+${factsBlock || '(ยังไม่มีข้อมูลแบรนด์)'}
 
 === เสียงลูกค้าจริง ===
-${quotesBlock || '(ไม่มี customer quotes)'}
-
-=== บริบทตลาด ===
-ลพบุรี-สิงห์บุรี-อ่างทอง — อากาศร้อนทั้งปี, ตลาด home improvement กลุ่ม middle income,
-ลูกค้าหลัก: พ่อบ้าน-แม่บ้าน-เจ้าของธุรกิจขนาดเล็ก-คนรุ่นใหม่ที่อยู่คอนโด/หอ.
+${quotesBlock || '(ยังไม่มี customer quotes)'}
 
 === Ad ที่จะทดสอบกับชุมชน ===
 Style: ${ad.style}
@@ -130,25 +203,31 @@ ${ad.visual_idea}
 // to answer 4 questions about the ad embedded in the seed.
 // ════════════════════════════════════════════════════════════════════
 
-const buildInterviewPrompt = (ad: AdIdea): string => `
-คุณคือสมาชิกชุมชนเสมือนที่ได้เห็น ad นี้:
+const buildInterviewPrompt = (ad: AdIdea): string => `\
+คุณคือสมาชิกชุมชนในลพบุรีที่ได้เห็น ad ชิ้นนี้บน Facebook/TikTok:
 
 Style: ${ad.style}
 Copy:
 ${ad.copy}
-
 Visual idea: ${ad.visual_idea}
 
-ตอบเป็น JSON object เดียวเท่านั้น (ไม่มี text นอก JSON):
+ตอบตามบุคลิกและชีวิตจริงของตัวละครที่คุณเล่น ตอบเป็น JSON object เดียวเท่านั้น ไม่มี text อื่นนอก JSON:
 {
   "would_click": "yes" | "no" | "maybe",
-  "reason": "เหตุผลสั้นๆ ใน 1-2 ประโยค (ภาษาไทย)",
-  "objection": "ข้อโต้แย้ง/ข้อกังวลหลัก ใน 1 ประโยค (ภาษาไทย หรือ 'none' ถ้าไม่มี)",
+  "reason": "เหตุผล 1-2 ประโยค — ทำไมถึงคลิก/ไม่คลิก (ภาษาไทย)",
+  "objection": "ข้อกังวล/สิ่งที่รั้งไว้ 1 ประโยค (ภาษาไทย) หรือ 'none'",
   "trust": 1 | 2 | 3 | 4 | 5,
   "would_share": "yes" | "no",
   "stance": "positive" | "neutral" | "negative",
-  "quote": "ประโยคที่คุณอาจพูดต่อหน้าเพื่อน 1 ประโยค (ภาษาไทย)"
+  "quote": "ประโยคที่คุณจะพูดถึง ad นี้ต่อหน้าเพื่อน/ครอบครัว 1 ประโยค (ภาษาไทย)",
+  "purchase_timeline": "now" | "this_month" | "this_year" | "no",
+  "wom_channel": "line_group" | "facebook" | "tell_friend" | "none"
 }
+
+คำอธิบายฟิลด์:
+- trust: 1=ไม่เชื่อเลย, 3=กลางๆ, 5=เชื่อมากและไว้ใจ
+- purchase_timeline: now=ติดต่อเลย, this_month=ภายในเดือนนี้, this_year=ปีนี้, no=ไม่ซื้อ
+- wom_channel: จะแชร์/บอกต่อผ่านช่องทางไหน (none=ไม่บอกต่อ)
 `.trim();
 
 // ════════════════════════════════════════════════════════════════════
@@ -163,7 +242,10 @@ interface ParsedResponse {
   would_share: 'yes' | 'no';
   stance: 'positive' | 'neutral' | 'negative';
   quote: string;
+  // Optional enrichment fields — present in new prompt, absent in legacy runs.
   agent_persona?: string;
+  purchase_timeline?: 'now' | 'this_month' | 'this_year' | 'no';
+  wom_channel?: 'line_group' | 'facebook' | 'tell_friend' | 'none';
 }
 
 // MiroFish's interview/all endpoint returns the `result` field as
@@ -204,6 +286,9 @@ const safeJson = (s: string): unknown => {
   }
 };
 
+const TIMELINE_VALUES = new Set(['now', 'this_month', 'this_year', 'no'] as const);
+const WOM_VALUES = new Set(['line_group', 'facebook', 'tell_friend', 'none'] as const);
+
 const coerceResponse = (obj: unknown): ParsedResponse | null => {
   if (!obj || typeof obj !== 'object') return null;
   const r = obj as Record<string, unknown>;
@@ -217,6 +302,12 @@ const coerceResponse = (obj: unknown): ParsedResponse | null => {
   const trustNum = Number(r.trust);
   const trust = Number.isFinite(trustNum) ? Math.min(5, Math.max(1, Math.round(trustNum))) : 3;
 
+  // Optional enrichment — gracefully absent in legacy/short runs.
+  const timelineRaw = String(r.purchase_timeline ?? '').toLowerCase() as ParsedResponse['purchase_timeline'];
+  const purchase_timeline = TIMELINE_VALUES.has(timelineRaw as never) ? timelineRaw : undefined;
+  const womRaw = String(r.wom_channel ?? '').toLowerCase() as ParsedResponse['wom_channel'];
+  const wom_channel = WOM_VALUES.has(womRaw as never) ? womRaw : undefined;
+
   return {
     would_click: click,
     reason: typeof r.reason === 'string' ? r.reason : '',
@@ -226,6 +317,8 @@ const coerceResponse = (obj: unknown): ParsedResponse | null => {
     stance,
     quote: typeof r.quote === 'string' ? r.quote : '',
     agent_persona: typeof r.agent_persona === 'string' ? r.agent_persona : undefined,
+    purchase_timeline,
+    wom_channel,
   };
 };
 
@@ -248,8 +341,36 @@ const aggregateObjections = (responses: readonly ParsedResponse[]): ObjectionIte
   return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 5);
 };
 
+const WOM_LABEL: Record<NonNullable<ParsedResponse['wom_channel']>, string> = {
+  line_group: 'LINE กลุ่ม',
+  facebook: 'Facebook',
+  tell_friend: 'บอกเพื่อน',
+  none: '',
+};
+
+const TIMELINE_LABEL: Record<NonNullable<ParsedResponse['purchase_timeline']>, string> = {
+  now: 'ซื้อเลย',
+  this_month: 'ซื้อเดือนนี้',
+  this_year: 'ซื้อปีนี้',
+  no: 'ไม่ซื้อ',
+};
+
+const buildPersonaTag = (r: ParsedResponse): string => {
+  const base = r.agent_persona ?? 'agent';
+  const parts: string[] = [];
+  if (r.purchase_timeline && r.purchase_timeline !== 'no') {
+    parts.push(TIMELINE_LABEL[r.purchase_timeline]);
+  }
+  if (r.wom_channel && r.wom_channel !== 'none') {
+    parts.push(`แชร์ ${WOM_LABEL[r.wom_channel]}`);
+  }
+  return parts.length > 0 ? `${base} · ${parts.join(' · ')}` : base;
+};
+
 const pickQuotes = (responses: readonly ParsedResponse[]): QuoteItem[] => {
-  // Keep up to 6, balanced across stances when possible.
+  // Keep up to 6 quotes, balanced across stances.
+  // Prefer quotes from agents with high purchase intent — they're most
+  // actionable as marketing evidence and objection signals.
   const byStance: Record<'positive' | 'neutral' | 'negative', QuoteItem[]> = {
     positive: [],
     neutral: [],
@@ -258,11 +379,13 @@ const pickQuotes = (responses: readonly ParsedResponse[]): QuoteItem[] => {
   for (const r of responses) {
     if (!r.quote.trim()) continue;
     byStance[r.stance].push({
-      persona: r.agent_persona ?? 'agent',
+      persona: buildPersonaTag(r).slice(0, 60),
       text: r.quote.trim().slice(0, 280),
       stance: r.stance,
     });
   }
+  // Interleave stances: positive, negative, neutral alternating — ensures
+  // both advocates and critics appear even in short quote lists.
   const out: QuoteItem[] = [];
   for (let i = 0; i < 2; i += 1) {
     if (byStance.positive[i]) out.push(byStance.positive[i]);
