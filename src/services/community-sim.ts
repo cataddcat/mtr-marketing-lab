@@ -360,9 +360,23 @@ export const runCommunitySim = async (
     simulationId = sim.simulation_id;
 
     // ── 4. Prepare profiles
+    // Pass entity_types from the ontology — without this, backend defaults
+    // to an empty set, produces zero profiles, and the task reports
+    // "complete" while the simulation silently fails to register as ready
+    // (manifests as "Simulation not ready. Current status: failed" at the
+    // /start call). Captured 2026-05-19 from a real prepare log:
+    //   "预期实体数量: 0, 类型: set()"
     report('sim_preparing', `generate ${config.agent_count} agent profiles...`, 35);
+    if (ontology.entityTypes.length === 0) {
+      throw new Error(
+        'Ontology returned zero entity types. The seed text was probably too '
+        + 'small or generic for MiroFish to extract distinct populations. '
+        + 'Try adding brand facts and customer quotes before running again.',
+      );
+    }
     const prep = await prepareSimulation({
       simulationId,
+      entityTypes: ontology.entityTypes,
       parallelProfileCount: config.agent_count,
       signal,
     });

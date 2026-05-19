@@ -408,6 +408,399 @@ the response (rare — most Python serialisers include every field).
 For any new MiroFish endpoint added to `mirofish-client.ts`,
 follow this convention up front so the schema doesn't reject reality.
 
+#### 🐛 Schema mismatch fix #3 — `/prepare/status` multi-shape response (2026-05-19)
+
+Cat hit yet another schema rejection — this time at `getPrepareStatus`,
+caught on the same end-to-end flow that #1 and #2 finally got past.
+Root cause was different from null-vs-undefined: this endpoint returns
+**four different response shapes** depending on which path the request
+hits in `D:\_Projects\MiroFish\backend\app\api\simulation.py`:
+
+1. `simulation_id` only + already prepared → has `simulation_id`
+2. `simulation_id` only + not started → has `simulation_id`
+3. `task_id` lookup, task missing but sim ready → has `simulation_id` + `task_id`
+4. `task_id` lookup, task found → `task.to_dict() | {already_prepared: false}`
+   — **no `simulation_id`** in the response
+
+The frontend `PrepareStatusResponseSchema` had `simulation_id: v.string()`
+as required. Path 4 (the most common one when polling progress) trips it.
+
+Fix:
+- `simulation_id: v.string()` → `v.nullish(v.string())`
+- Wrap with `v.looseObject({...})` instead of `v.object({...})` so future
+  backend fields (already_prepared, prepare_info, task_id, task_type, etc.)
+  pass through silently.
+- Helper `getPrepareStatus` already coalesces null → undefined and does
+  not surface `simulation_id` to the caller, so the type widening is
+  contained inside the client.
+
+Verified: `npm run build` clean. The 400 from `/api/simulation/stop`
+shown in the same trace was the fire-and-forget cleanup inside
+`runCommunitySim`'s catch handler — once the underlying schema bug
+no longer throws, the stop call no longer fires either.
+
+Lesson: when a single endpoint's response shape branches by request
+shape (path 1 vs 2 vs 3 vs 4 above), **the schema must accept the
+intersection of all branches**, not just the canonical one. Use
+`v.nullish` for any field that's only present in some branches, and
+wrap with `v.looseObject` so branch-specific extras (like `prepare_info`)
+don't trip validation either. Reading the backend handler top-to-bottom
+to enumerate every return statement is the only reliable way to spot
+this — don't trust API docs.
+
+#### 🐛 JSON truncation fix — token budget × non-Latin scripts (2026-05-19)
+
+Right after the schema fixes shipped, Cat hit `LLM返回的JSON格式无效`
+(invalid JSON) mid-ontology. The displayed JSON cut off mid-string at
+`"org_name", "type": "` — classic max_tokens-exhausted truncation,
+not a model formatting issue.
+
+Root cause: **Thai/Chinese text takes 2-3x more BPE tokens than
+English** in Llama tokenizers. The ontology JSON has Thai entity
+descriptions and attribute descriptions; with 5-10 entity types ×
+3-6 attributes each, the output easily exceeds 4096 tokens. Same
+risk in `oasis_profile_generator` (agent profiles with Thai bios)
+and `simulation_config_generator` (Thai narrative + event lists).
+
+Fix in `D:\_Projects\MiroFish\backend\app\utils\llm_client.py`:
+- `chat_json` default `max_tokens`: 4096 → **8192**
+- `chat_json` now **retries once with doubled budget (16384)** if the
+  first response fails `json.loads`. The retry catches the common
+  case where attempt 1 produced clean JSON that just ran out of room.
+- Error message translated to English per the no-Chinese policy:
+  `"LLM returned invalid JSON after retry (first error: ..., final
+  length: N chars). Response preview: ..."`
+
+Fix in callers (each Thai-heavy JSON producer):
+- `ontology_generator.py` — explicit `max_tokens=8192` (was 4096)
+- `oasis_profile_generator.py` — `max_tokens=8192` (was 4096)
+- `simulation_config_generator.py` — `max_tokens=8192` (was 4096)
+
+`report_agent.py` left at 4096 — its `chat` calls are inside the
+ReACT loop with short tool-call/Final-Answer responses per iteration,
+not one giant JSON dump. If a section truncates we'll bump it then.
+
+Trade-off accepted: larger max_tokens widens the cost-per-call ceiling
+on paid providers (Together at $0.88/M tokens output). Free-pool
+providers (Groq/SambaNova) bill on TPD only, so the impact there is
+zero unless we get extremely chatty responses. Most calls won't even
+approach 8192 — `max_tokens` is a cap, not a target.
+
+Lesson: when a model speaks a non-Latin script as primary language,
+**multiply your token budget by 2-3x what you'd use for English**.
+Set `max_tokens` based on the longest expected output in the target
+language's encoding, not the casual default.
+
+#### 🐛 Schema mismatch fix #4 — `/interview/all` dict-shaped results (2026-05-19)
+
+The community-sim pipeline finally reached the interview stage and
+hit another schema rejection — this time at `interviewAll`. Same
+session, fifth schema bug in `mirofish-client.ts`. Reading the
+backend handler this time before guessing:
+
+`D:\_Projects\MiroFish\backend\app\api\simulation.py:2409` →
+`SimulationRunner.interview_all_agents` →
+`interview_agents_batch` (line 1492) returns:
+
+```python
+{
+  "success": True,
+  "interviews_count": N,
+  "result": {                              # nested!
+    "interviews_count": N,
+    "results": {                           # DICT, not list
+      "twitter_0": {"agent_id": 0, "response": "...", "platform": "twitter"},
+      "reddit_0":  {"agent_id": 0, "response": "...", "platform": "reddit"},
+      ...
+    }
+  },
+  "timestamp": "..."
+}
+```
+
+The frontend's old schema:
+```typescript
+v.object({
+  interviews_count: v.nullish(v.number()),
+  results: v.nullish(v.array(v.unknown())),   // flat top-level array
+})
+```
+
+Two structural lies: `results` is actually nested under `result.`
+(extra hop), AND it's a `dict` keyed by `<platform>_<agent_id>`,
+not an array.
+
+Fix (`src/lib/mirofish-client.ts`):
+- `InterviewAllResponseSchema` now matches reality — `v.looseObject`
+  outer + nested `result.results` typed as `v.record(v.string(), v.unknown())`
+- `interviewAll()` helper flattens `Object.values(result.results)` to a
+  flat array so the consumer contract (`{count, results: unknown[]}`)
+  stays unchanged — `community-sim.ts` doesn't need to change.
+- Helper's `count` fallback: `result.interviews_count ?? top-level
+  interviews_count ?? flattened.length`.
+
+`community-sim.ts` parseInterview already does DFS through object
+values looking for candidate JSON (originally written for an unknown
+shape), so each entry `{agent_id, response, platform}` lands cleanly —
+the `response` field is itself JSON-as-a-string from the interview
+prompt, which the parser extracts.
+
+Build clean (809 KB).
+
+Lesson reinforced: when a backend handler delegates to another
+service that's itself wrapping IPC results from a subprocess
+(`SimulationRunner.interview_agents_batch` wraps `SimulationIPCClient`
+wraps the simulation child process' response), the response shape
+acquires **nesting layers per wrapper**. Never type the schema
+against the docstring example at the API layer — open the lowest
+wrapper and trace upward. The five schema bugs in this session
+(Status enum, optional vs nullish on null, multi-branch
+`/prepare/status`, missing `simulation_id` in path 4, this nested
+dict) all share that root cause: backend has more shape variance
+than the API layer hints.
+
+#### 🩺 Diagnostic upgrade — `unwrap` shows mismatch path inline (2026-05-19)
+
+After the fifth schema bug in one session, the diagnostic loop itself
+became the bottleneck — every `[mirofish] schema mismatch Array(1) Object`
+required Cat to expand the dev-tools dropdowns to find which field failed.
+
+`mirofish-client.ts` `unwrap` now pre-flattens valibot issues into
+human-readable summaries that surface in both the console AND the
+thrown `MiroFishError` message:
+
+```
+[mirofish] schema mismatch:
+  at "data.result.results": expected Record<string, unknown>, received Array
+[mirofish] full payload: { ... }
+```
+
+The user-facing toast/error also includes the inline summary so we
+don't have to ask Cat to open DevTools to learn what failed. Saves
+~5 minutes per round-trip on schema-mismatch diagnostics.
+
+#### 🐛 Pipeline bug fix — missing `entity_types` to `prepareSimulation` (2026-05-19)
+
+Community-sim run reached `sim_starting` then failed with:
+*"Simulation not ready. Current status: failed. Please call /prepare
+first."* — even though the prepare task itself had reported
+`status=completed, progress=100`.
+
+Backend log revealed the real story (sim_dd21f2a37763 at 09:57:20):
+```
+prepare_simulation: 预期实体数量: 0, 类型: set()
+```
+i.e. backend ran the prepare task to completion but decided to generate
+profiles for **zero entity types**, leaving the simulation in a `failed`
+state with no `simulation_config.json` / `reddit_profiles.json` /
+`twitter_profiles.csv` written. `_check_simulation_prepared` then
+returned `is_prepared=False` at `/start`.
+
+Cause: `community-sim.ts` was calling `prepareSimulation({simulationId,
+parallelProfileCount: 5})` without `entityTypes`. The backend defaults
+`entityTypes` to an empty set when the client omits it — the silent
+failure mode is the bug.
+
+The frontend already had the data: `generateOntology()` returned
+`entity_types: v.array(v.unknown())` in the schema but `OntologyResult`
+only kept the count, dropping the actual names.
+
+Fix:
+- `OntologyResponseSchema`'s `entity_types` is now typed
+  `v.array(v.looseObject({ name: v.string() }))` so we can read names.
+- `OntologyResult` gets a new `entityTypes: readonly string[]` field.
+- `community-sim.ts` Stage 4 (Prepare) passes
+  `entityTypes: ontology.entityTypes` to `prepareSimulation`.
+- Plus a fail-fast guard: if ontology returned zero entity types, throw
+  a clear error pointing the user at brand-facts/customer-quotes seed
+  enrichment instead of letting them watch the pipeline silently break
+  at the start stage three minutes later.
+
+Lesson: when a backend endpoint accepts an optional parameter that has
+a destructive default (empty set → zero profiles → silent failure), the
+client should ALWAYS pass it explicitly. The "optional" in the API
+signature is a footgun, not a convenience.
+
+#### 🐛 Schema fix #6 + envelope shape #3 — `success:false` with nested error (2026-05-19)
+
+After the diagnostic upgrade landed, the next error finally had a clear
+path: `at "success": expected true, received false`. The interview-all
+endpoint's response when the IPC subprocess fails uses a **third
+envelope shape** the client wasn't ready for:
+
+```json
+{
+  "success": false,
+  "data": {
+    "success": false,
+    "interviews_count": N,
+    "error": "<the real error>",
+    "timestamp": "..."
+  }
+}
+```
+
+`EnvelopeOk` rejected `success:false`. `EnvelopeErr` rejected it too
+because that schema required `error: v.string()` at the top level —
+but the error is nested inside `data` here. Both parsers fail, so
+`unwrap` fell through to throwing the raw schema-mismatch.
+
+Fix in `mirofish-client.ts`:
+- `EnvelopeErr` is now `v.looseObject` with `error: v.nullish(v.string())`
+  and accepts an optional `data` payload.
+- New helper `extractNestedError(payload)` digs into `data.error`,
+  `data.message`, or top-level `message` as fallbacks.
+- When `EnvelopeErr` parses successfully but `error` is missing,
+  `unwrap` calls `extractNestedError` to get the real message instead
+  of a generic "MiroFish reported failure" placeholder.
+
+Also translated three subprocess error strings from Chinese to English
+(surface in UI):
+- `"没有成功的采访"` → "No agent interview produced a response. Check
+  the simulation subprocess stdout for the platform env.step error —
+  common causes are LLM rate-limit during the interview round or the
+  simulation env being shut down before interview was called."
+- `"没有有效的Agent"` (both reddit + twitter scripts) → "No valid Agent
+  found for any interview entry — check agent_ids in the request."
+- `"批量Interview失败"` print → "Batch interview failed"
+
+These are in `backend/scripts/run_{parallel,reddit,twitter}_simulation.py`
+— files the upstream MiroFish maintainer owns. Translating since they
+surface as user-facing error toasts in MTR. If we ever rebase from
+upstream, expect conflicts here.
+
+Lesson: API envelope conventions need to be honoured at every backend
+exit point. When subprocess wrapping introduces "success at one layer,
+error at another", the envelope contract breaks and the client either
+needs a permissive parser or the backend needs to flatten the error
+upward. We took the parser route here; the cleaner upstream fix would
+be to have the API layer unwrap `data.error` → top-level `error` when
+`data.success === false`.
+
+#### 🐛 Real failure surfaced — camel-ai bypasses the LLM pool (2026-05-19)
+
+With the diagnostic + envelope fixes in place, the next interview run
+surfaced the actual root cause from the subprocess log
+(`uploads/simulations/<sim_id>/simulation.log`):
+
+```
+[Twitter] Batch interview failed: Rate limit reached for model
+  llama-3.3-70b-versatile ... Limit 100000, Used 100000, Requested 1083.
+  Please try again in 15m35.712s.
+[Reddit] Batch interview failed: <same Groq 429>
+```
+
+Architectural footgun documented in §12 land mine #2 finally bit:
+**camel-ai (the OASIS sim engine inside the run_*.py subprocesses)
+reads `LLM_API_KEY/LLM_BASE_URL/LLM_MODEL_NAME` directly. It does NOT
+go through MiroFish's `LLMClient` pool**. So when the configured single
+endpoint exhausts (Groq TPD 100K hit by mid-day), camel-ai has no
+fallback and the interview fails wholesale even though the pool itself
+would have routed to Together AI just fine.
+
+Immediate fix (chosen): pointed the legacy env at Together AI:
+```
+LLM_API_KEY=tgp_v1_...
+LLM_BASE_URL=https://api.together.xyz/v1
+LLM_MODEL_NAME=meta-llama/Llama-3.3-70B-Instruct-Turbo
+```
+- Together has $5 free credit + per-second billing
+- Each community-sim run ≈ 5,000 tokens × $0.88/M = **~$0.004 (≈0.15฿)**
+- $5 covers ~1,200 runs before any out-of-pocket cost
+- Backend restarted; sim + interview now route to Together for camel-ai
+  while MiroFish-layer calls (ontology, report agent) still go through
+  the pool
+
+**Switching back**: after Groq's TPD resets at midnight UTC
+(~07:00 Bangkok), edit `D:\_Projects\MiroFish\.env` legacy block back
+to Groq values (commented at the top of that block) if you want to
+preserve Together credit. Not urgent — burn rate is trivial.
+
+Real long-term fix (deferred — out of scope for this session): wrap a
+small OpenAI-compatible HTTP server around `LLMClient` and point
+`LLM_BASE_URL` at that local server. Then camel-ai gets pool failover
+"for free" via the proxy. Effort: ~half-day; ROI low while $5 Together
+credit covers daily testing.
+
+#### ⚙️ Pool reorder — LIGHT prefers Together over Kaggle (2026-05-19)
+
+While Cat watched the `npm run all` terminal, the next sim hung at
+"sim_starting" with no further log lines. Diagnosis: `LIGHT` pool was
+ordered `groq → sambanova → kaggle → together`. Groq + SambaNova
+were both rate-limited (cooldown 600s), so the pool fell through to
+**Kaggle** for the ontology call (8K+ tokens at ~1-2 tok/s through the
+Cloudflare tunnel = up to 70 minutes per call).
+
+The original cost-aware logic ("kaggle before together to save the
+$5 credit") was right for the HEAVY pool (small per-call tokens, lots
+of calls), wrong for LIGHT (one big call per pipeline stage). Split
+the orders per workload:
+
+```
+LLM_PROVIDERS_LIGHT = groq, sambanova, together, kaggle   # ← together moved up
+LLM_PROVIDERS_HEAVY = kaggle, sambanova, groq, together
+LLM_PROVIDERS       = kaggle, sambanova, groq, together
+```
+
+`.env` comments updated to explain the trade-off so the next operator
+doesn't reorder it back without seeing the consequence.
+
+Cost impact: when both Groq + SambaNova rate-limit, a single LIGHT
+call now goes to Together (~$0.004 / 5,000 tokens) instead of waiting
+30-60 min on Kaggle. Still cheap; still preserves Kaggle for HEAVY.
+
+**Operational gotcha noted**: when Claude killed the backend Python
+process directly while Cat had `npm run all` running, `concurrently
+--kill-others-on-fail` tore down BOTH mtr (Vite :5173) AND mirofish
+(:3000) along with it. To restart cleanly: kill the orphan backend,
+then re-run `npm run all` from MTR repo root. Don't kill the python
+PID under `npm run all` — kill the whole concurrently process tree
+or use `Ctrl+C` in the terminal.
+
+#### 🌐 Logger/print Chinese sweep — backend now English-only (2026-05-19)
+
+After the community-sim pipeline finally succeeded end-to-end, Cat saw
+~130 Chinese log lines still streaming through the `npm run all`
+terminal during a normal sim run (initial post assignment, prepare
+complete, send IPC command, etc.). Per the no-new-Chinese policy
+(`feedback_no_chinese_in_new_code.md`) and Cat's directive about
+user-visible workflow strings, did a one-shot sweep.
+
+Two scripts in `D:\_Projects\MiroFish\scripts\`:
+
+1. `translate_logger_strings.py` — walks backend/*.py, matches
+   `logger.{info,warning,error,debug,critical}(...)` and `print(...)`
+   calls with Chinese string literals (regular or f-strings), applies
+   a curated 200-entry CN→EN dictionary, reports unmatched fragments
+   to `translate_unmatched.txt`. Dry-run by default; `--apply` to write.
+   - Result: **334 calls translated across 18 files**, 0 unmatched.
+
+2. `fixup_concat_artifacts.py` — second pass to add missing spaces
+   where adjacent Chinese phrases got their English translations
+   concatenated (`Zep客户端初始化失败` → `Zepclientinitfailed` →
+   `Zep client init failed`). Regex-based with word boundaries to
+   avoid touching legitimate CamelCase identifiers.
+   - Result: **58 calls patched across 11 files**.
+
+Smoke test: backend started clean, boot log is all English
+("MiroFish Backend ready" not "MiroFish Backend 启动完成"), the
+community-sim pipeline still works end-to-end.
+
+Out of scope (intentionally not translated):
+- Chinese inside docstrings and comments — not user-visible at runtime,
+  upstream MiroFish maintainer authored them. Pre-commit hook policy
+  is "no NEW Chinese", so these legacy strings can stay until someone
+  edits the surrounding code.
+- Chinese inside i18n locale files (`locales/zh.json`) — that's the
+  translation table itself; keep it.
+- Chinese inside LLM prompt templates (`SECTION_SYSTEM_PROMPT_TEMPLATE`
+  etc.). Output language is controlled by `LLM_OUTPUT_LANG=th`; the
+  prompt body's language doesn't affect the model's output.
+
+Scripts kept in repo so future sessions can extend the dictionary
+when new Chinese log lines slip in from upstream rebases. The
+pre-commit hook continues to block new Chinese in committed code.
+
 #### 🔧 MTR Cloudflare Worker — add Together AI as last-resort (2026-05-19)
 
 The MTR proxy worker (`mtr-marketing-lab-proxy.cataddcat.workers.dev`)

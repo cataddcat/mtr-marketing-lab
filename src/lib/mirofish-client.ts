@@ -28,11 +28,33 @@ const EnvelopeOk = <T extends v.GenericSchema>(data: T) =>
     data,
   });
 
-const EnvelopeErr = v.object({
+// Some MiroFish endpoints (notably /interview/all) return a third envelope
+// shape when the subprocess fails: `success: false` at the top level but
+// the error message + status are nested inside `data` rather than at the
+// top level. EnvelopeErr is permissive enough to catch this — `error` is
+// nullish — and the unwrap helper digs into data.error if needed.
+const EnvelopeErr = v.looseObject({
   success: v.literal(false),
-  error: v.string(),
+  error: v.nullish(v.string()),
   traceback: v.nullish(v.string()),
+  data: v.nullish(v.unknown()),
 });
+
+const extractNestedError = (payload: unknown): string | undefined => {
+  if (!payload || typeof payload !== 'object') return undefined;
+  const obj = payload as Record<string, unknown>;
+  // Common shapes (in priority):
+  //   { data: { error: "..." } }
+  //   { data: { message: "..." } }
+  //   { message: "..." }
+  if (obj.data && typeof obj.data === 'object') {
+    const nested = obj.data as Record<string, unknown>;
+    if (typeof nested.error === 'string' && nested.error) return nested.error;
+    if (typeof nested.message === 'string' && nested.message) return nested.message;
+  }
+  if (typeof obj.message === 'string' && obj.message) return obj.message;
+  return undefined;
+};
 
 const unwrap = async <T,>(
   res: Response,
@@ -50,8 +72,14 @@ const unwrap = async <T,>(
 
   const errParsed = v.safeParse(EnvelopeErr, payload);
   if (errParsed.success) {
+    // Prefer top-level error; fall back to nested data.error (the shape
+    // /interview/all uses when the IPC subprocess fails).
+    const errorMsg =
+      errParsed.output.error ??
+      extractNestedError(payload) ??
+      `MiroFish reported failure (HTTP ${res.status}) but did not include an error message`;
     throw new MiroFishError(
-      errParsed.output.error,
+      errorMsg,
       res.status,
       payload,
       errParsed.output.traceback ?? undefined,
@@ -68,9 +96,22 @@ const unwrap = async <T,>(
 
   const okParsed = v.safeParse(okSchema, payload);
   if (!okParsed.success) {
-    console.error('[mirofish] schema mismatch', okParsed.issues, payload);
+    // Pre-flatten the issues so the browser console + thrown message
+    // surface the actual mismatch path/expected/received instead of an
+    // unexpanded "Array(1) Object". Past sessions wasted multiple
+    // round-trips waiting for Cat to expand the dev-tools dropdown.
+    const issueSummaries = okParsed.issues.map(issue => {
+      const path = (issue.path ?? [])
+        .map((seg: { key?: unknown }) =>
+          seg.key === undefined ? '?' : String(seg.key),
+        )
+        .join('.');
+      return `at "${path}": expected ${issue.expected}, received ${issue.received}`;
+    });
+    console.error('[mirofish] schema mismatch:\n  ' + issueSummaries.join('\n  '));
+    console.error('[mirofish] full payload:', payload);
     throw new MiroFishError(
-      'MiroFish response did not match schema',
+      `MiroFish response did not match schema — ${issueSummaries.join('; ')}`,
       res.status,
       payload,
     );
@@ -127,12 +168,14 @@ export const healthCheck = async (signal?: AbortSignal): Promise<{ status: strin
 // Graph: ontology generation (upload seed) + build
 // ════════════════════════════════════════════════════════════════════
 
+// Each entity_type in the ontology has at minimum a `name` field; backend
+// also returns description, attributes, etc. which we don't need here.
 const OntologyResponseSchema = EnvelopeOk(
   v.object({
     project_id: v.string(),
     project_name: v.nullish(v.string()),
     ontology: v.object({
-      entity_types: v.array(v.unknown()),
+      entity_types: v.array(v.looseObject({ name: v.string() })),
       edge_types: v.array(v.unknown()),
     }),
     analysis_summary: v.nullish(v.string()),
@@ -144,6 +187,13 @@ const OntologyResponseSchema = EnvelopeOk(
 export interface OntologyResult {
   projectId: string;
   projectName?: string;
+  /** Entity type names extracted from the ontology. Pass these straight
+   *  into prepareSimulation() so the backend knows which graph entities
+   *  to spawn agent profiles for — omitting them causes prepare to run
+   *  to "task complete" but leave the simulation in a `failed` state
+   *  (entity_types defaults to empty set on the backend, yielding zero
+   *  profiles, yielding no simulation_config.json). */
+  entityTypes: readonly string[];
   entityTypeCount: number;
   edgeTypeCount: number;
   analysisSummary: string;
@@ -183,10 +233,12 @@ export const generateOntology = async (params: {
     signal: params.signal,
   });
   const env = await unwrap(res, OntologyResponseSchema);
+  const entityTypes = env.data.ontology.entity_types.map(et => et.name);
   return {
     projectId: env.data.project_id,
     projectName: env.data.project_name ?? undefined,
-    entityTypeCount: env.data.ontology.entity_types.length,
+    entityTypes,
+    entityTypeCount: entityTypes.length,
     edgeTypeCount: env.data.ontology.edge_types.length,
     analysisSummary: env.data.analysis_summary ?? '',
     textLength: env.data.total_text_length ?? 0,
@@ -368,9 +420,16 @@ export const prepareSimulation = async (params: {
   };
 };
 
+// Backend has four response shapes for /prepare/status:
+//   1. sim already prepared          → has simulation_id
+//   2. sim not started                → has simulation_id
+//   3. task missing but sim prepared  → has simulation_id + task_id
+//   4. task found, polling progress   → task.to_dict() — NO simulation_id
+// Use looseObject + nullish so schema accepts all four; the helper falls
+// back to params.simulationId when the backend omits it.
 const PrepareStatusResponseSchema = EnvelopeOk(
-  v.object({
-    simulation_id: v.string(),
+  v.looseObject({
+    simulation_id: v.nullish(v.string()),
     status: v.string(),
     progress: v.nullish(v.number()),
     message: v.nullish(v.string()),
@@ -638,10 +697,34 @@ export const interviewAgent = async (params: {
   };
 };
 
+// Backend `data` shape for /interview/all (from simulation_runner.interview_agents_batch):
+//   {
+//     success: true,
+//     interviews_count: N,
+//     result: {
+//       interviews_count: N,
+//       results: {
+//         "twitter_0": { agent_id, response, platform },   // dict, NOT list
+//         "reddit_0":  { ... },
+//         ...
+//       }
+//     },
+//     timestamp: "..."
+//   }
+// Use looseObject + v.record for the dict-shaped results map.
 const InterviewAllResponseSchema = EnvelopeOk(
-  v.object({
+  v.looseObject({
+    success: v.nullish(v.boolean()),
     interviews_count: v.nullish(v.number()),
-    results: v.nullish(v.array(v.unknown())),
+    timestamp: v.nullish(v.string()),
+    result: v.nullish(
+      v.looseObject({
+        interviews_count: v.nullish(v.number()),
+        // Map of "<platform>_<agent_id>" → { agent_id, response, platform }.
+        // Treat each entry as unknown; consumer parses .response payload.
+        results: v.nullish(v.record(v.string(), v.unknown())),
+      }),
+    ),
   }),
 );
 
@@ -664,9 +747,16 @@ export const interviewAll = async (params: {
     InterviewAllResponseSchema,
     params.signal,
   );
+  // Flatten the dict-of-entries into a plain array — community-sim.ts
+  // parses each entry independently and doesn't care about platform
+  // ordering. Each entry is `{ agent_id, response, platform }` where
+  // `response` is the agent's reply string (often itself JSON, parsed
+  // downstream by parseInterview()).
+  const resultsDict = env.data.result?.results ?? {};
+  const flattened = Object.values(resultsDict);
   return {
-    count: env.data.interviews_count ?? (env.data.results?.length ?? 0),
-    results: env.data.results ?? [],
+    count: env.data.result?.interviews_count ?? env.data.interviews_count ?? flattened.length,
+    results: flattened,
   };
 };
 
