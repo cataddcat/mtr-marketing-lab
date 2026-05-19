@@ -224,8 +224,16 @@ ${args.ad.visual_idea}
         message: 'กำลัง generate agent profiles...',
       }));
 
+      if (ontology.entityTypes.length === 0) {
+        throw new Error(
+          'Ontology returned zero entity types. The seed text was probably too '
+          + 'small or generic for MiroFish to extract distinct populations. '
+          + 'Try adding brand facts and customer quotes before running again.',
+        );
+      }
       const prep = await prepareSimulation({
         simulationId,
+        entityTypes: ontology.entityTypes,
         signal,
       });
 

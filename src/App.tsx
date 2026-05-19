@@ -140,12 +140,14 @@ export default function App() {
     const visualAborts = visualAbortsRef.current;
     const rewriteAborts = rewriteAbortsRef.current;
     const ensembleAborts = ensembleAbortsRef.current;
+    const communityAborts = communityAbortsRef.current;
     return () => {
       generateAbortRef.current?.abort();
       evalAborts.forEach(c => c.abort());
       visualAborts.forEach(c => c.abort());
       rewriteAborts.forEach(c => c.abort());
       ensembleAborts.forEach(c => c.abort());
+      communityAborts.forEach(c => c.abort());
     };
   }, []);
 
@@ -177,6 +179,10 @@ export default function App() {
     setEnsembleErrors({});
     ensembleAbortsRef.current.forEach(c => c.abort());
     ensembleAbortsRef.current.clear();
+    communityAbortsRef.current.forEach(c => c.abort());
+    communityAbortsRef.current.clear();
+    setCommunityRunning({});
+    setCommunityErrors({});
     try {
       const [results, trends] = await Promise.all([
         generateAds(product, promo, controller.signal, {
