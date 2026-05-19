@@ -35,7 +35,6 @@ import type {
   Sentiment,
 } from '../lib/schemas';
 import type { BrandFact } from '../lib/brand-facts';
-import type { CustomerQuote } from '../lib/customer-quotes';
 
 const POLL_GRAPH_MS = 3000;
 const POLL_PREPARE_MS = 3000;
@@ -80,7 +79,6 @@ export interface RunCommunitySimArgs {
   readonly ad: AdIdea;
   readonly config: CommunitySimConfig;
   readonly brandFacts?: readonly BrandFact[];
-  readonly customerQuotes?: readonly CustomerQuote[];
   readonly onProgress?: (p: CommunitySimProgress) => void;
   readonly signal?: AbortSignal;
 }
@@ -102,17 +100,11 @@ export interface RunCommunitySimArgs {
 const buildSeedText = (
   ad: AdIdea,
   brandFacts: readonly BrandFact[],
-  customerQuotes: readonly CustomerQuote[],
 ): string => {
   const factsBlock = brandFacts
     .filter(f => f.enabled && f.value.trim())
     .map(f => `• ${f.label}: ${f.value}`)
     .join('\n');
-
-  const quotesBlock = customerQuotes
-    .filter(q => q.enabled && q.quote.trim())
-    .map(q => `[${q.persona}] "${q.quote}"${q.context ? ` (${q.context})` : ''}`)
-    .join('\n\n');
 
   return `\
 === ชุมชนจำลอง: ตลาดม่านและการตกแต่งบ้าน ลพบุรี-สิงห์บุรี-อ่างทอง ===
@@ -183,9 +175,6 @@ const buildSeedText = (
 
 === ข้อมูลแบรนด์ ม่านธารา ===
 ${factsBlock || '(ยังไม่มีข้อมูลแบรนด์)'}
-
-=== เสียงลูกค้าจริง ===
-${quotesBlock || '(ยังไม่มี customer quotes)'}
 
 === Ad ที่จะทดสอบกับชุมชน ===
 Style: ${ad.style}
@@ -447,7 +436,7 @@ const aggregate = (
 export const runCommunitySim = async (
   args: RunCommunitySimArgs,
 ): Promise<CommunitySim> => {
-  const { ad, config, brandFacts = [], customerQuotes = [], onProgress, signal } = args;
+  const { ad, config, brandFacts = [], onProgress, signal } = args;
   const report = (stage: CommunitySimProgressStage, message: string, percent: number): void =>
     onProgress?.({ stage, message, percent });
 
@@ -455,7 +444,7 @@ export const runCommunitySim = async (
   try {
     // ── 1. Seed + ontology
     report('seed_uploading', 'อัปโหลด seed และวิเคราะห์ ontology...', 5);
-    const seed = buildSeedText(ad, brandFacts, customerQuotes);
+    const seed = buildSeedText(ad, brandFacts);
     const simRequirement = `วิเคราะห์ปฏิกิริยาของชุมชนต่อ ad ม่านธารา style "${ad.style}" — คาดการณ์ engagement, sentiment, และข้อโต้แย้ง`;
 
     const ontology = await generateOntology({

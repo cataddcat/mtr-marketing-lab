@@ -66,7 +66,7 @@ export function CompetitorInput({ value, onChange }: Props) {
         value={value}
         onChange={e => onChange(e.target.value)}
         rows={5}
-        placeholder="วาง ad คู่แข่ง — Judge จะเปรียบเทียบให้"
+        placeholder="วาง ad คู่แข่ง — Judge จะเปรียบเทียบให้ (เช่น 'ลด 50% ทั้งร้าน ฟรีติดตั้ง' หรือ 'ม่านระดับโรงแรม 5 ดาว ราคาเริ่ม ฿3,500/ตรม.')"
         lang="th"
         className="w-full min-h-[140px] resize-none rounded-md border border-border bg-bg px-3 py-2 text-sm leading-relaxed text-fg-1 placeholder:text-fg-4 transition-colors hover:border-border-strong focus:border-accent"
       />

@@ -7,9 +7,12 @@ import {
   AdEvaluationSchema,
   VisualPromptSchema,
   PERSONA_LABELS,
+  PERSONA_DESCRIPTIONS,
+  PersonaIdSchema,
   type AdEvaluation,
   type ParsedAdIdea,
   type PersonaEval,
+  type PersonaId,
   type VisualPrompt,
 } from '../lib/schemas';
 import type { TrendsSnapshot } from './trends';
@@ -18,11 +21,6 @@ import {
   hashBrandFacts,
   type BrandFact,
 } from '../lib/brand-facts';
-import {
-  formatQuotesForPrompt,
-  hashQuotes,
-  type CustomerQuote,
-} from '../lib/customer-quotes';
 import { buildTimeContextBlock } from '../lib/seasonal-context';
 import { buildNicheContextBlock, filterNicheTrends } from '../lib/niche-seeds';
 import {
@@ -304,18 +302,27 @@ const hashCommunitySim = (sim: CommunitySim | null): string => {
   return sim.sim_id;
 };
 
+/**
+ * Render the 15-persona pool as a compact reference block for the Judge.
+ * The Judge picks 3-6 most relevant from this list per ad — not all 15.
+ */
+const PERSONA_POOL_BLOCK: string = (() => {
+  const ids = PersonaIdSchema.options as readonly PersonaId[];
+  const lines = ids.map(id => `  ${id} (${PERSONA_LABELS[id]}) — ${PERSONA_DESCRIPTIONS[id]}`);
+  return `PERSONA POOL — 15 archetypes (เลือก 3-6 ตัวที่เกี่ยวข้องมากที่สุดกับ ad นี้)
+${lines.join('\n')}`;
+})();
+
 const buildJudgePrompt = (
   trends: TrendsSnapshot | null,
   brandFacts: readonly BrandFact[],
   competitor: string | null = null,
-  customerQuotes: readonly CustomerQuote[] = [],
   calibration: readonly CalibrationExample[] = [],
   strategyBrief: StrategyBrief | null = null,
   communitySim: CommunitySim | null = null,
 ): string => {
   const trendsBlock = buildTrendsBlock(trends);
   const factsBlock = formatBrandFactsForPrompt(brandFacts);
-  const quotesBlock = formatQuotesForPrompt(customerQuotes);
   const calibrationBlock = formatCalibrationForPrompt(calibration);
   const timeBlock = buildTimeContextBlock();
   const nicheBlock = buildNicheContextBlock();
@@ -365,41 +372,29 @@ STRATEGY FIT — เนื่องจากมี <STRATEGY_BRIEF> ติดม
 ใส่ field "strategy_fit" ใน JSON output ตามรูปแบบด้านล่าง`
     : '';
   return `คุณคือ Consumer Panel Simulator สำหรับ "ม่านธารา" (ท่าศาลา, ลพบุรี)
-จงสวมบทบาทผู้บริโภค 4 คนนี้พร้อมกัน แต่ละคนเห็นโฆษณานี้ใน feed Facebook/IG/TikTok ขณะอยู่ในบริบทเฉพาะของตัวเอง
+จงเลือกผู้บริโภค 3-6 archetype จาก persona pool ด้านล่าง ที่ "เกี่ยวข้องมากที่สุดกับ ad นี้"
 ห้ามให้คะแนน "เฉลี่ยๆ" — ถ้าโฆษณาไม่ตรงกลุ่ม ให้คะแนนต่ำตรงไปตรงมา
 
 ═══════════════════════════════════════════════════════════════
-PERSONA 1 — family_man (พ่อบ้าน)
-อายุ 38-55 · มีรถกระบะ · ทำงานช่าง/ราชการ/เกษตร · ห่วงค่าไฟ-รับประกัน-ความทนทาน
-บริบทตอนเห็นโฆษณา: นั่งดู FB หลังกินข้าวเย็น ลูกดูทีวีอยู่ข้างๆ
-ชอบ: ตัวเลข, ปีรับประกัน, "ติดง่ายเอง?", หน้าร้านจริง, ภาพช่างทำงาน
-เกลียด: คำอู้อี้, "พรีเมียม" ไม่บอกราคา, รูปสตูดิโอจัดฉาก
+${PERSONA_POOL_BLOCK}
 
-PERSONA 2 — housewife (แม่บ้าน)
-อายุ 35-58 · ดูแลบ้าน/ครัว · ห่วงแสงร้อน-ฝุ่น-ลูก-สุนัข-การทำความสะอาด
-บริบทตอนเห็นโฆษณา: นั่งเล่น FB ระหว่างซักผ้า ลพบุรีเที่ยง 36°C
-ชอบ: before/after, "ลด 4-6°C", การประเมินฟรี, ภาพบ้านจริง
-เกลียด: ฮาร์ดเซลล์, รูปอวด, ภาษาขายของ
-
-PERSONA 3 — businessman (เจ้าของธุรกิจ)
-อายุ 30-50 · ร้านอาหาร/โรงแรม/ออฟฟิศ ลพบุรี-สิงห์บุรี
-บริบทตอนเห็นโฆษณา: รอลูกค้าระหว่าง slow hour ที่ร้าน เปิดมือถือดูข่าว
-ชอบ: ROI ชัด, รับงานหลายห้อง, ใบกำกับภาษี, ทีมงานติดตั้งเอง
-เกลียด: โฆษณาที่พูดแต่บ้านพักอาศัย ไม่มีข้อมูล B2B
-
-PERSONA 4 — genz (Gen Z ไทย) ← ใช้เกณฑ์คนละชุดเลย ห้ามคิดแบบ persona 1-3
-อายุ 18-28 · อยู่คอนโด/หอ/บ้านพ่อแม่ · ติด TikTok+Reels 4+ ชม./วัน · งบจำกัดแต่จ่ายเพื่อ "vibe ของห้อง"
-บริบทตอนเห็นโฆษณา: doom-scroll TikTok ก่อนนอน 23:30 น. feed เป็น aesthetic content
-ชอบ: POV, BTS, golden/blue hour, soft light, มินิมอล, ภาษาแชท, สแลง 2026
-เกลียด: "ค่ะ/ครับ" หนัก, "พิเศษเฉพาะคุณ", "!!!", emoji สแปม, รูปกราฟิกจัดเต็ม
+กฎการเลือก:
+• เลือก 3-6 personas (ไม่ใช่ทั้ง 15) — เฉพาะที่ "น่าจะเป็นลูกค้าจริง" ของ ad นี้
+• ถ้า ad เน้น aesthetic/visual → จะมี GenZ/มิลเลนเนียลโผล่
+• ถ้า ad เน้นตัวเลข/warranty/ROI → จะมี family_man, businessman, contractor
+• ถ้า ad เน้นราคาถูก → ต้องมี price_hunter
+• ถ้ามี Strategy Brief ติดมา (ด้านล่าง) → priority คือ linked_persona ของ segments ใน brief
+• ถ้า ad เป็น B2B → ต้องมี businessman / businessman_hotelier / contractor / interior_designer
+• ห้ามเลือก "พรรค pleaser" ที่ชอบทุกอย่าง — ต้องมีอย่างน้อย 1 คนที่ "เฉยๆ หรือไม่ชอบ" ถ้า ad มีจุดอ่อนจริง
 ${trendsBlock}
 ═══════════════════════════════════════════════════════════════
-สำหรับแต่ละ persona ให้คะแนน 3 มิติ (สำคัญที่สุด — ห้ามใส่คะแนนเดียวรวม):
+สำหรับแต่ละ persona ที่คุณเลือก ให้คะแนน 3 มิติ (สำคัญที่สุด — ห้ามใส่คะแนนเดียวรวม):
   scroll_stop_score (0-10) : 0.5 วินาทีแรก หยุดเลื่อนได้ไหม (gut reaction)
   focused_score    (0-10)  : หลังจ้อง 5 วินาที ตัดสินใจได้ไหม (rational)
   memory_score     (0-10)  : ผ่านไป 1 ชั่วโมง ยังจำได้ไหม (retention)
 
 แต่ละ persona ต้องตอบ:
+  id            : ใช้ id ตรงตามรายการใน pool ด้านบน (เช่น "family_man", "businessman_hotelier", "price_hunter")
   confidence    : ความมั่นใจในการประเมิน — "high" / "med" / "low"
                   high = โฆษณาสื่อสารชัดเจน คุณตัดสินได้แน่นอน
                   med  = ดูได้บางส่วน แต่บางอย่างยังไม่ชัด
@@ -410,7 +405,7 @@ ${trendsBlock}
 
 panel_verdict : สรุปฉันทามติของทั้ง panel 1 บรรทัด (เช่น "ปังกับ GenZ แต่หลุดกับพ่อบ้าน")
 trends_used   : array ของเทรนด์ที่ใช้ในการประเมิน (ใส่ [] ถ้าไม่ใช้)
-average_score : ค่าเฉลี่ยของ 12 คะแนนย่อย (3 มิติ × 4 personas) ปัดทศนิยม 1 ตำแหน่ง
+average_score : ค่าเฉลี่ยของคะแนนย่อยทั้งหมด (3 มิติ × N personas ที่เลือก) ปัดทศนิยม 1 ตำแหน่ง
 
 ═══════════════════════════════════════════════════════════════
 STRUCTURAL ANALYSIS — แยกประเมิน ad copy เป็น 3 ส่วน (ที่ระดับ ad ไม่ใช่ persona):
@@ -457,13 +452,15 @@ ${strategyFitInstructions}
     "reasoning": "..."
   },
   "personas": [
+    /* ใส่ 3-6 entries — เฉพาะ persona ที่คุณ "เลือก" จาก pool ด้านบน
+       (ห้ามใส่ทั้ง 15 — เลือกที่เกี่ยวข้องจริงเท่านั้น)
+       id ต้องตรงเป๊ะกับ id ใน pool */
     {"id": "family_man",  "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."},
-    {"id": "housewife",   "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."},
-    {"id": "businessman", "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."},
-    {"id": "genz",        "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."}
+    {"id": "housewife",   "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "med",  "verdict": "...", "suggestion": "..."},
+    {"id": "price_hunter","scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "low",  "verdict": "...", "suggestion": "..."}
   ],
   "average_score": 0.0${competitorJsonField}${strategyFitJsonField}
-}${timeBlock}${nicheBlock}${factsBlock}${quotesBlock}${calibrationBlock}${competitorBlock}${briefBlock}${formatCommunitySimForPrompt(communitySim)}`;
+}${timeBlock}${nicheBlock}${factsBlock}${calibrationBlock}${competitorBlock}${briefBlock}${formatCommunitySimForPrompt(communitySim)}`;
 };
 
 export interface EvaluateAdOptions {
@@ -476,8 +473,6 @@ export interface EvaluateAdOptions {
   readonly cacheSalt?: string;
   /** Optional competitor ad text — adds comparison block to the output. */
   readonly competitorAd?: string;
-  /** Real customer quotes to ground the Judge with actual voice references. */
-  readonly customerQuotes?: readonly CustomerQuote[];
   /**
    * Past saved ads + their real outcomes — Judge sees these as few-shot
    * priors so it can adjust scoring toward what actually works in the shop.
@@ -507,7 +502,6 @@ export const evaluateAd = async (
 ): Promise<AdEvaluation | null> => {
   const trends = options.trends ?? null;
   const brandFacts = options.brandFacts ?? [];
-  const customerQuotes = options.customerQuotes ?? [];
   const calibration = options.calibration ?? [];
   const strategyBrief = options.strategyBrief ?? null;
   const communitySim = options.communitySim ?? null;
@@ -516,7 +510,6 @@ export const evaluateAd = async (
     trends,
     brandFacts,
     competitor,
-    customerQuotes,
     calibration,
     strategyBrief,
     communitySim,
@@ -528,13 +521,12 @@ export const evaluateAd = async (
 
   const trendsDate = trends?.cached_at.slice(0, 10) ?? 'no-trends';
   const factsHash = hashBrandFacts(brandFacts);
-  const quotesHash = hashQuotes(customerQuotes);
   const calibHash = hashCalibrationExamples(calibration);
   const briefHash = hashStrategyBrief(strategyBrief);
   const simHash = hashCommunitySim(communitySim);
   const salt = options.cacheSalt ?? '';
   const compHash = competitor ? hashString(competitor) : '';
-  const cacheKeyData = `${ad.copy}\n${ad.visual_idea}\n${trendsDate}\n${factsHash}\n${quotesHash}\n${calibHash}\n${briefHash}\n${simHash}\n${salt}\n${compHash}`;
+  const cacheKeyData = `${ad.copy}\n${ad.visual_idea}\n${trendsDate}\n${factsHash}\n${calibHash}\n${briefHash}\n${simHash}\n${salt}\n${compHash}`;
 
   try {
     return await generateAndExtract({
@@ -696,7 +688,6 @@ export interface EnsembleOptions {
   readonly trends?: TrendsSnapshot | null;
   readonly brandFacts?: readonly BrandFact[];
   readonly competitorAd?: string;
-  readonly customerQuotes?: readonly CustomerQuote[];
   readonly calibration?: readonly CalibrationExample[];
   readonly strategyBrief?: StrategyBrief | null;
   /** Extra runs to perform on top of the baseline (default 2 → 3 total). */
@@ -718,7 +709,6 @@ export const runEnsembleEval = async (
         trends: options.trends,
         brandFacts: options.brandFacts,
         competitorAd: options.competitorAd,
-        customerQuotes: options.customerQuotes,
         calibration: options.calibration,
         strategyBrief: options.strategyBrief,
         cacheSalt: salt,

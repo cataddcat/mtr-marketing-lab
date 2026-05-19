@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef, useId } from 'react';
+import { useState, useEffect, useMemo, useRef, useId } from 'react';
 import { generateAds, evaluateAd, generateImagePrompt, rewriteAd, runEnsembleEval } from './services/marketing-agent';
 import type { AdIdea, AdEvaluation, VisualPrompt } from './services/marketing-agent';
 import type { RewriteState } from './components/PersonaScoreCard';
 import type { PersonaId, ParsedAdIdea } from './lib/schemas';
 import { fetchTrends, type TrendsSnapshot } from './services/trends';
-import { Loader2, Target, Bookmark, Settings, MessageSquareQuote, Sparkles, LogOut, FolderTree, Fish } from 'lucide-react';
+import { Loader2, Target, Bookmark, Settings, Sparkles, LogOut, FolderTree, Fish } from 'lucide-react';
 import { InlineError } from './components/InlineError';
 import { useToast } from './components/toast-context';
 import { CompetitorInput } from './components/CompetitorInput';
@@ -13,7 +13,6 @@ import { TranslatePanel } from './components/TranslatePanel';
 import { isPerformanceEmpty, type PerformanceMetrics } from './lib/performance';
 import { BrandFactsView, BrandFactsAddButton } from './components/BrandFactsView';
 import { BrandFactsBanner } from './components/BrandFactsBanner';
-import { CustomerQuotesView, CustomerQuotesAddButton } from './components/CustomerQuotesView';
 import { StrategyBriefView, StrategyBriefHeaderAction } from './components/StrategyBriefView';
 import { StrategyBriefBanner } from './components/StrategyBriefBanner';
 import { Sheet } from './components/Sheet';
@@ -24,7 +23,6 @@ import { AdCard } from './components/AdCard';
 import { SummaryStrip } from './components/SummaryStrip';
 import { SavedLibrary } from './components/SavedLibrary';
 import { useBrandFacts } from './hooks/useBrandFacts';
-import { useCustomerQuotes } from './hooks/useCustomerQuotes';
 import { useStrategyBrief } from './hooks/useStrategyBrief';
 import { useAuth } from './hooks/useAuth';
 import { SignInScreen } from './components/SignInScreen';
@@ -38,6 +36,7 @@ import { PERSONA_LABELS } from './lib/schemas';
 import type { CommunitySim, CommunitySimConfig } from './lib/schemas';
 import { runCommunitySim, type CommunitySimProgress } from './services/community-sim';
 import { PRODUCT_EXAMPLES, PROMO_EXAMPLES } from './lib/example-prompts';
+import { loadInputDraft, persistInputDraft } from './lib/input-draft';
 import { selectCalibrationExamples } from './lib/calibration';
 
 type Outcome = 'used-good' | 'used-bad';
@@ -59,25 +58,34 @@ export default function App() {
   const auth = useAuth();
   const toast = useToast();
   const brandFactsApi = useBrandFacts();
-  const customerQuotesApi = useCustomerQuotes();
   const [activeTab, setActiveTab] = useState<'generator' | 'library'>('generator');
   const [factsPanelOpen, setFactsPanelOpen] = useState(false);
-  const [quotesPanelOpen, setQuotesPanelOpen] = useState(false);
   const [briefPanelOpen, setBriefPanelOpen] = useState(false);
   const [exportPanelOpen, setExportPanelOpen] = useState(false);
   const [communityPanelOpen, setCommunityPanelOpen] = useState(false);
   const [communityTargetAdIndex, setCommunityTargetAdIndex] = useState<number | null>(null);
-  const [quotesActivePersona, setQuotesActivePersona] = useState<PersonaId>('family_man');
   const [performanceTarget, setPerformanceTarget] = useState<string | null>(null);
   const [translateTarget, setTranslateTarget] = useState<string | null>(null);
   const productId = useId();
   const promoId = useId();
   const savedHeadingId = useId();
   const resultsHeadingId = useId();
-  const [product, setProduct] = useState('');
-  const [promo, setPromo] = useState('');
+  // Restore draft once on first render — survives F5 / tab restart.
+  // useState's lazy initializer guarantees loadInputDraft() runs only once.
+  const [product, setProduct] = useState(() => loadInputDraft().product);
+  const [promo, setPromo] = useState(() => loadInputDraft().promo);
   const strategyBriefApi = useStrategyBrief({ product, promo, brandFacts: brandFactsApi.facts });
-  const [competitorAd, setCompetitorAd] = useState('');
+  const [competitorAd, setCompetitorAd] = useState(() => loadInputDraft().competitorAd);
+
+  // Debounced auto-save: persist 500ms after typing pauses so we don't
+  // thrash localStorage on every keystroke. The cleanup cancels in-flight
+  // timers when state changes again, giving us trailing-edge debounce.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      persistInputDraft({ product, promo, competitorAd });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [product, promo, competitorAd]);
   const [ads, setAds] = useState<AdIdea[]>([]);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -115,6 +123,9 @@ export default function App() {
   const [communityConfigForIdx, setCommunityConfigForIdx] = useState<number | null>(null);
   const [communityRunning, setCommunityRunning] = useState<Record<number, boolean>>({});
   const [communityErrors, setCommunityErrors] = useState<Record<number, string>>({});
+  // Detailed per-ad progress so the AdCard can show "stage label + bar + message"
+  // while community sim is mid-flight (the boolean above only covers "is running").
+  const [communityProgress, setCommunityProgress] = useState<Record<number, CommunitySimProgress>>({});
   const communityAbortsRef = useRef<Map<number, AbortController>>(new Map());
 
   useEffect(() => {
@@ -183,6 +194,7 @@ export default function App() {
     communityAbortsRef.current.clear();
     setCommunityRunning({});
     setCommunityErrors({});
+    setCommunityProgress({});
     try {
       const [results, trends] = await Promise.all([
         generateAds(product, promo, controller.signal, {
@@ -245,7 +257,6 @@ export default function App() {
         trends: trendsRef.current,
         brandFacts: brandFactsApi.facts,
         competitorAd,
-        customerQuotes: customerQuotesApi.quotes,
         calibration: calibrationExamples,
         strategyBrief: strategyBriefApi.current,
         communitySim: priorCommunitySim,
@@ -342,7 +353,6 @@ export default function App() {
         trends: trendsRef.current,
         brandFacts: brandFactsApi.facts,
         competitorAd,
-        customerQuotes: customerQuotesApi.quotes,
         calibration: calibrationExamples,
         strategyBrief: strategyBriefApi.current,
       });
@@ -420,6 +430,8 @@ export default function App() {
     let lastNotifiedStage: CommunitySimProgress['stage'] | null = null;
     const onProgress = (p: CommunitySimProgress): void => {
       console.debug('[community-sim]', p.stage, p.percent, p.message);
+      // Mirror progress to React state so AdCard can render a live stage/percent UI.
+      setCommunityProgress(prev => ({ ...prev, [idx]: p }));
       const milestone: ReadonlyArray<CommunitySimProgress['stage']> = [
         'sim_running',
         'interviewing',
@@ -435,7 +447,6 @@ export default function App() {
         ad,
         config,
         brandFacts: brandFactsApi.facts,
-        customerQuotes: customerQuotesApi.quotes,
         onProgress,
         signal: controller.signal,
       });
@@ -462,6 +473,12 @@ export default function App() {
         communityAbortsRef.current.delete(idx);
       }
       setCommunityRunning(prev => {
+        if (!(idx in prev)) return prev;
+        const next = { ...prev };
+        delete next[idx];
+        return next;
+      });
+      setCommunityProgress(prev => {
         if (!(idx in prev)) return prev;
         const next = { ...prev };
         delete next[idx];
@@ -679,8 +696,18 @@ ${personaLines}
   };
 
   const activeBrandFacts = brandFactsApi.facts.filter(f => f.enabled).length;
-  const activeQuotes = customerQuotesApi.quotes.filter(q => q.enabled && q.quote.trim().length > 0).length;
-  const calibrationExamples = selectCalibrationExamples(savedAds);
+  // Memoize: selectCalibrationExamples sorts + filters savedAds; avoid the
+  // recompute on every keystroke in unrelated fields.
+  const calibrationExamples = useMemo(
+    () => selectCalibrationExamples(savedAds),
+    [savedAds],
+  );
+  // Set of saved-ad IDs currently feeding the Judge — SavedLibrary uses this
+  // to badge the exact items that are actively shaping new evaluations.
+  const calibratingIds = useMemo(
+    () => new Set(calibrationExamples.map(e => e.id)),
+    [calibrationExamples],
+  );
   const feedbackRecords = useAllFeedback();
   // Auth gate (Track D1). When Supabase is not configured, auth.status is
   // 'disabled' and we render the app as before (local-only mode).
@@ -850,7 +877,7 @@ ${personaLines}
                 value={product}
                 onChange={(e) => setProduct(e.target.value)}
                 rows={5}
-                placeholder="เช่น ม่านลอนเทปผ้า Blackout"
+                placeholder="เช่น ม่านลอนเทปผ้า Blackout เกรดโรงแรม กันแสง 99% กันร้อน 4-6°C"
                 lang="th"
                 className="w-full min-h-[140px] resize-none rounded-md border border-border bg-bg px-3 py-2 text-sm leading-relaxed text-fg-1 placeholder:text-fg-4 transition-colors hover:border-border-strong focus:border-accent"
               />
@@ -872,7 +899,7 @@ ${personaLines}
                 value={promo}
                 onChange={(e) => setPromo(e.target.value)}
                 rows={5}
-                placeholder="เช่น ประเมินหน้างานฟรี ท่าศาลา-ลพบุรี"
+                placeholder="เช่น ประเมินหน้างานฟรี + ผ่อน 0% 3 เดือน · ภายใน 31 พ.ค."
                 lang="th"
                 className="w-full min-h-[140px] resize-none rounded-md border border-border bg-bg px-3 py-2 text-sm leading-relaxed text-fg-1 placeholder:text-fg-4 transition-colors hover:border-border-strong focus:border-accent"
               />
@@ -955,15 +982,6 @@ ${personaLines}
             >
               <Settings className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
               Brand facts · <b className="text-fg-1 font-medium">{activeBrandFacts}</b>
-            </button>
-            <button
-              type="button"
-              onClick={() => setQuotesPanelOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-pill border border-border-faint text-fg-2 hover:text-fg-1 hover:bg-bg-hover transition-colors"
-              title="เสียงลูกค้าจริง — Judge ใช้เป็น tone reference ตอนประเมิน"
-            >
-              <MessageSquareQuote className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
-              Customer quotes · <b className="text-fg-1 font-medium">{activeQuotes}</b>
             </button>
             <button
               type="button"
@@ -1071,6 +1089,7 @@ ${personaLines}
                         onRunEnsemble={() => handleRunEnsemble(idx, ad)}
                         communityLoading={!!communityRunning[idx]}
                         communityError={communityErrors[idx]}
+                        communityProgress={communityProgress[idx]}
                         onRunCommunity={() => handleOpenCommunityConfig(idx)}
                         copiedIndex={copiedIndex}
                         onCopy={handleCopy}
@@ -1137,6 +1156,7 @@ ${personaLines}
                 <SavedLibrary
                   items={savedAds}
                   headingId={savedHeadingId}
+                  calibratingIds={calibratingIds}
                   onRemove={handleRemoveSaved}
                   onToggleOutcome={handleToggleOutcome}
                   onOpenPerformance={setPerformanceTarget}
@@ -1182,7 +1202,7 @@ ${personaLines}
                     onClick={() => {
                       const summary = applyDemoBundle();
                       toast.success(
-                        `โหลดแล้ว · ${summary.savedAds} ads · ${summary.briefs} brief · ${summary.quotes} quotes — กำลัง refresh...`,
+                        `โหลดแล้ว · ${summary.savedAds} ads · ${summary.briefs} brief · ${summary.brandFacts} brand facts — กำลัง refresh...`,
                       );
                       setTimeout(() => window.location.reload(), 800);
                     }}
@@ -1231,7 +1251,6 @@ ${personaLines}
         <CommunitySimulationPanel
           ad={communityTargetAdIndex !== null ? ads[communityTargetAdIndex] ?? null : null}
           brandFacts={brandFactsApi.facts}
-          customerQuotes={customerQuotesApi.quotes}
         />
       </Sheet>
 
@@ -1262,8 +1281,7 @@ ${personaLines}
         <ExportPanel
           input={{
             brandFacts: brandFactsApi.facts,
-            customerQuotes: customerQuotesApi.quotes,
-            briefs: strategyBriefApi.all,
+                briefs: strategyBriefApi.all,
             savedAds,
             feedback: feedbackRecords,
             exportedAt: new Date().toISOString(),
@@ -1296,29 +1314,6 @@ ${personaLines}
           onRegenerate={handleRegenerateBrief}
           onUpdate={strategyBriefApi.update}
           onClear={strategyBriefApi.clearCurrent}
-        />
-      </Sheet>
-
-      <Sheet
-        open={quotesPanelOpen}
-        onClose={() => setQuotesPanelOpen(false)}
-        title="เสียงลูกค้าจริง"
-        headerAction={
-          <CustomerQuotesAddButton
-            activePersona={quotesActivePersona}
-            onAdd={customerQuotesApi.add}
-          />
-        }
-      >
-        <CustomerQuotesView
-          quotes={customerQuotesApi.quotes}
-          onUpdate={customerQuotesApi.update}
-          onAdd={customerQuotesApi.add}
-          onRemove={customerQuotesApi.remove}
-          onResetAll={customerQuotesApi.resetAll}
-          onResetField={customerQuotesApi.resetField}
-          activePersona={quotesActivePersona}
-          onActivePersonaChange={setQuotesActivePersona}
         />
       </Sheet>
 

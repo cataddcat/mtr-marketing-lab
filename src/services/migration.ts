@@ -1,19 +1,16 @@
 import { getSupabase } from '../lib/auth-client';
 import { BrandFactsSchema, type BrandFact } from '../lib/brand-facts';
-import { CustomerQuotesSchema, type CustomerQuote } from '../lib/customer-quotes';
 import { StrategyBriefsSchema, type StrategyBrief } from '../lib/strategy-brief';
 import * as v from 'valibot';
 
 const LOCAL_KEYS = {
   brandFacts: 'mtr_brand_facts',
-  customerQuotes: 'mtr_customer_quotes',
   savedAds: 'mtr_saved_ads',
   strategyBriefs: 'mtr_strategy_briefs',
 } as const;
 
 export interface MigrationSummary {
   brandFacts: number;
-  customerQuotes: number;
   savedAds: number;
   strategyBriefs: number;
   errors: string[];
@@ -33,8 +30,6 @@ const readJson = <T,>(key: string, schema: v.GenericSchema<unknown, T>): T | nul
 /** What's in localStorage right now — for displaying a preview before migrating. */
 export const inspectLocalData = () => ({
   brandFacts: readJson<readonly BrandFact[]>(LOCAL_KEYS.brandFacts, BrandFactsSchema)?.length ?? 0,
-  customerQuotes:
-    readJson<readonly CustomerQuote[]>(LOCAL_KEYS.customerQuotes, CustomerQuotesSchema)?.length ?? 0,
   savedAds: countSavedAds(),
   strategyBriefs:
     readJson<readonly StrategyBrief[]>(LOCAL_KEYS.strategyBriefs, StrategyBriefsSchema)?.length ?? 0,
@@ -79,7 +74,6 @@ export const importLocalToCloud = async (userId: string): Promise<MigrationSumma
   if (!sb) {
     return {
       brandFacts: 0,
-      customerQuotes: 0,
       savedAds: 0,
       strategyBriefs: 0,
       errors: ['Supabase ยังไม่ได้ตั้งค่า'],
@@ -88,7 +82,6 @@ export const importLocalToCloud = async (userId: string): Promise<MigrationSumma
 
   const summary: MigrationSummary = {
     brandFacts: 0,
-    customerQuotes: 0,
     savedAds: 0,
     strategyBriefs: 0,
     errors: [],
@@ -102,19 +95,6 @@ export const importLocalToCloud = async (userId: string): Promise<MigrationSumma
       .upsert({ user_id: userId, facts: facts as unknown as object });
     if (error) summary.errors.push(`brand_facts: ${error.message}`);
     else summary.brandFacts = facts.length;
-  }
-
-  // customer_quotes — single row
-  const quotes = readJson<readonly CustomerQuote[]>(
-    LOCAL_KEYS.customerQuotes,
-    CustomerQuotesSchema,
-  );
-  if (quotes && quotes.length > 0) {
-    const { error } = await sb
-      .from('customer_quotes')
-      .upsert({ user_id: userId, quotes: quotes as unknown as object });
-    if (error) summary.errors.push(`customer_quotes: ${error.message}`);
-    else summary.customerQuotes = quotes.length;
   }
 
   // saved_ads — one row per ad

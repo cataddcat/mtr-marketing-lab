@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { AdIdea, VisualPrompt } from '../services/marketing-agent';
 import type { AdEvaluation, PersonaId } from '../lib/schemas';
+import type { CommunitySimProgress } from '../services/community-sim';
 import { PERSONA_LABELS, personaAverage } from '../lib/schemas';
 import { isMiroFishConfigured } from '../lib/mirofish-client';
 import type { RewriteState } from './PersonaScoreCard';
@@ -31,6 +32,78 @@ import { Gauge } from './Gauge';
 import { Radar } from './Radar';
 import { ScoreBar } from './ScoreBar';
 import { scoreClass, scoreLabel, scoreColorVar, scoreBgVar } from '../lib/score';
+
+// ── Community Deep-Eval progress display ────────────────────────────
+// Mirrors the 8-stage pipeline in services/community-sim.ts so the user
+// sees which step the MiroFish run is currently on (typically 3-15 min).
+const COMMUNITY_STAGE_LABEL: Record<CommunitySimProgress['stage'], string> = {
+  seed_uploading: '1/8 อัปโหลด seed text',
+  graph_building: '2/8 สร้าง community graph',
+  sim_creating:   '3/8 สร้าง simulation',
+  sim_preparing:  '4/8 generate agent profiles',
+  sim_starting:   '5/8 เริ่ม simulation',
+  sim_running:    '6/8 agents กำลังโต้ตอบ',
+  interviewing:   '7/8 สัมภาษณ์ agents',
+  aggregating:    '8/8 สรุปผลลัพธ์',
+  done:           'เสร็จสมบูรณ์',
+};
+
+interface CommunityProgressBarProps {
+  readonly progress: CommunitySimProgress | undefined;
+}
+
+function CommunityProgressBar({ progress }: CommunityProgressBarProps) {
+  // Before the first onProgress fires we still want to show *something*,
+  // so fall back to a neutral "0% · starting" line.
+  const stage = progress?.stage ?? 'seed_uploading';
+  const percent = Math.max(0, Math.min(100, progress?.percent ?? 0));
+  const message = progress?.message ?? 'กำลังเริ่ม community sim...';
+
+  return (
+    <div
+      className="rounded-md border p-2.5 space-y-1.5"
+      style={{
+        background: 'var(--color-bg)',
+        borderColor: 'var(--color-border-faint)',
+      }}
+      role="status"
+      aria-live="polite"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span
+          className="font-mono text-[10.5px] tracking-[0.12em] uppercase"
+          style={{ color: 'var(--color-accent)' }}
+          lang="th"
+        >
+          {COMMUNITY_STAGE_LABEL[stage]}
+        </span>
+        <span className="font-mono text-[10.5px] text-fg-3 tabular-nums">
+          {percent}%
+        </span>
+      </div>
+      <div
+        className="w-full h-1 rounded-pill overflow-hidden"
+        style={{ background: 'var(--color-border-faint)' }}
+      >
+        <div
+          className="h-full transition-all"
+          style={{
+            width: `${percent}%`,
+            background: 'var(--color-accent)',
+          }}
+        />
+      </div>
+      <p className="text-[11px] text-fg-3 leading-relaxed flex items-start gap-1" lang="th">
+        <Loader2
+          className="inline w-3 h-3 animate-spin shrink-0 mt-0.5"
+          strokeWidth={1.5}
+          aria-hidden="true"
+        />
+        <span>{message}</span>
+      </p>
+    </div>
+  );
+}
 
 interface Props {
   readonly ad: AdIdea;
@@ -55,6 +128,7 @@ interface Props {
   // Track E.M2 — Super-Judge community simulation
   readonly communityLoading: boolean;
   readonly communityError: string | undefined;
+  readonly communityProgress: CommunitySimProgress | undefined;
   readonly onRunCommunity: () => void;
 
   readonly copiedIndex: string | null;
@@ -87,6 +161,7 @@ export function AdCard({
   onRunEnsemble,
   communityLoading,
   communityError,
+  communityProgress,
   onRunCommunity,
   copiedIndex,
   onCopy,
@@ -450,72 +525,77 @@ export function AdCard({
                     const disabled = communityLoading || !miroFishReady;
                     return (
                       <div
-                        className="rounded-md border p-3 flex items-center justify-between gap-2"
+                        className="rounded-md border p-3 space-y-2"
                         style={{
                           background: 'var(--color-bg-sunken)',
                           borderColor: 'var(--color-border-faint)',
                           borderLeft: '3px dashed var(--color-border)',
                         }}
                       >
-                        <div className="min-w-0">
-                          <p
-                            className="font-mono text-[10px] tracking-[0.14em] uppercase text-fg-3 inline-flex items-center gap-1.5"
-                            lang="en"
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p
+                              className="font-mono text-[10px] tracking-[0.14em] uppercase text-fg-3 inline-flex items-center gap-1.5"
+                              lang="en"
+                            >
+                              <Users className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+                              Community Deep-Eval
+                            </p>
+                            <p className="text-[11.5px] text-fg-3 leading-relaxed mt-0.5" lang="th">
+                              จำลองชุมชนเสมือนแล้วสัมภาษณ์ agents เพื่อดู sentiment, click intent, ข้อโต้แย้ง
+                            </p>
+                            {!miroFishReady && (
+                              <p
+                                className="text-[11px] mt-1.5 flex items-start gap-1 text-fg-4"
+                                lang="th"
+                              >
+                                <span aria-hidden="true">●</span>
+                                <span>
+                                  ฟีเจอร์นี้ใช้ได้เฉพาะ local dev (ต้องรัน MiroFish backend ที่{' '}
+                                  <code className="font-mono text-[10.5px]">localhost:5001</code>) —
+                                  ไม่ทำงานบน production build
+                                </span>
+                              </p>
+                            )}
+                            {miroFishReady && !communityLoading && communityError && (
+                              <p
+                                className="text-[11px] mt-1.5 flex items-start gap-1"
+                                style={{ color: 'var(--color-danger)' }}
+                                lang="th"
+                              >
+                                <span aria-hidden="true">⚠</span>
+                                <span>{communityError}</span>
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={onRunCommunity}
+                            disabled={disabled}
+                            aria-busy={communityLoading}
+                            title={!miroFishReady ? 'MiroFish ไม่ได้ตั้งค่า (VITE_MIROFISH_URL)' : undefined}
+                            className="shrink-0 inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 min-h-[32px] rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            style={{
+                              background: disabled
+                                ? 'var(--color-bg-elevated)'
+                                : 'color-mix(in oklch, var(--color-accent) 8%, transparent)',
+                              borderColor: miroFishReady
+                                ? 'color-mix(in oklch, var(--color-accent) 35%, transparent)'
+                                : 'var(--color-border)',
+                              color: miroFishReady ? 'var(--color-accent)' : 'var(--color-fg-3)',
+                            }}
                           >
-                            <Users className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
-                            Community Deep-Eval
-                          </p>
-                          <p className="text-[11.5px] text-fg-3 leading-relaxed mt-0.5" lang="th">
-                            จำลองชุมชนเสมือนแล้วสัมภาษณ์ agents เพื่อดู sentiment, click intent, ข้อโต้แย้ง
-                          </p>
-                          {!miroFishReady && (
-                            <p
-                              className="text-[11px] mt-1.5 flex items-start gap-1 text-fg-4"
-                              lang="th"
-                            >
-                              <span aria-hidden="true">●</span>
-                              <span>
-                                ฟีเจอร์นี้ใช้ได้เฉพาะ local dev (ต้องรัน MiroFish backend ที่{' '}
-                                <code className="font-mono text-[10.5px]">localhost:5001</code>) —
-                                ไม่ทำงานบน production build
-                              </span>
-                            </p>
-                          )}
-                          {miroFishReady && communityError && (
-                            <p
-                              className="text-[11px] mt-1.5 flex items-start gap-1"
-                              style={{ color: 'var(--color-danger)' }}
-                              lang="th"
-                            >
-                              <span aria-hidden="true">⚠</span>
-                              <span>{communityError}</span>
-                            </p>
-                          )}
+                            {communityLoading ? (
+                              <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.5} aria-hidden="true" />
+                            ) : (
+                              <Users className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+                            )}
+                            {communityLoading ? 'Running' : !miroFishReady ? 'Unavailable' : 'Run community sim'}
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={onRunCommunity}
-                          disabled={disabled}
-                          aria-busy={communityLoading}
-                          title={!miroFishReady ? 'MiroFish ไม่ได้ตั้งค่า (VITE_MIROFISH_URL)' : undefined}
-                          className="shrink-0 inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 min-h-[32px] rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          style={{
-                            background: disabled
-                              ? 'var(--color-bg-elevated)'
-                              : 'color-mix(in oklch, var(--color-accent) 8%, transparent)',
-                            borderColor: miroFishReady
-                              ? 'color-mix(in oklch, var(--color-accent) 35%, transparent)'
-                              : 'var(--color-border)',
-                            color: miroFishReady ? 'var(--color-accent)' : 'var(--color-fg-3)',
-                          }}
-                        >
-                          {communityLoading ? (
-                            <Loader2 className="w-3 h-3 animate-spin" strokeWidth={1.5} aria-hidden="true" />
-                          ) : (
-                            <Users className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
-                          )}
-                          {communityLoading ? 'Running' : !miroFishReady ? 'Unavailable' : 'Run community sim'}
-                        </button>
+                        {communityLoading && (
+                          <CommunityProgressBar progress={communityProgress} />
+                        )}
                       </div>
                     );
                   })()}

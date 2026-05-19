@@ -7,6 +7,7 @@ import {
   Copy as CopyIcon,
   Languages,
   Trash2,
+  Target,
 } from 'lucide-react';
 import type { AdIdea } from '../services/marketing-agent';
 import type { AdEvaluation } from '../lib/schemas';
@@ -25,6 +26,12 @@ export interface SavedAdItem extends AdIdea {
 interface Props {
   readonly items: readonly SavedAdItem[];
   readonly headingId: string;
+  /**
+   * Subset of `items` whose IDs are currently feeding the Judge's
+   * calibration prompt. Rendered as a small chip per matching item so
+   * the user can see which past ads are actively shaping new scores.
+   */
+  readonly calibratingIds?: ReadonlySet<string>;
   readonly onRemove: (id: string) => void;
   readonly onToggleOutcome: (id: string, outcome: Outcome) => void;
   readonly onOpenPerformance: (id: string) => void;
@@ -36,6 +43,7 @@ interface Props {
 export function SavedLibrary({
   items,
   headingId,
+  calibratingIds,
   onRemove,
   onToggleOutcome,
   onOpenPerformance,
@@ -116,21 +124,37 @@ export function SavedLibrary({
                 {it.copy}
               </p>
 
-              {/* Outcome chip */}
-              <span
-                className="font-mono text-[10.5px] tracking-[0.08em] uppercase px-2 py-1 rounded-pill border whitespace-nowrap"
-                style={{
-                  background: it.outcome
-                    ? (it.outcome === 'used-good' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)')
-                    : 'var(--color-bg-sunken)',
-                  color: it.outcome
-                    ? (it.outcome === 'used-good' ? 'var(--color-success)' : 'var(--color-warning)')
-                    : 'var(--color-fg-4)',
-                  borderColor: 'var(--color-border-faint)',
-                }}
-              >
-                {it.outcome === 'used-good' ? '↑ used · good' : it.outcome === 'used-bad' ? '↓ used · bad' : '— not used'}
-              </span>
+              {/* Outcome chip + optional calibration marker (stacked when both present) */}
+              <div className="flex flex-col items-end gap-1 whitespace-nowrap">
+                <span
+                  className="font-mono text-[10.5px] tracking-[0.08em] uppercase px-2 py-1 rounded-pill border"
+                  style={{
+                    background: it.outcome
+                      ? (it.outcome === 'used-good' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)')
+                      : 'var(--color-bg-sunken)',
+                    color: it.outcome
+                      ? (it.outcome === 'used-good' ? 'var(--color-success)' : 'var(--color-warning)')
+                      : 'var(--color-fg-4)',
+                    borderColor: 'var(--color-border-faint)',
+                  }}
+                >
+                  {it.outcome === 'used-good' ? '↑ used · good' : it.outcome === 'used-bad' ? '↓ used · bad' : '— not used'}
+                </span>
+                {calibratingIds?.has(it.id) && (
+                  <span
+                    className="inline-flex items-center gap-1 font-mono text-[10px] tracking-[0.08em] uppercase px-2 py-0.5 rounded-pill border"
+                    style={{
+                      background: 'color-mix(in oklch, var(--color-accent) 8%, transparent)',
+                      color: 'var(--color-accent)',
+                      borderColor: 'color-mix(in oklch, var(--color-accent) 35%, transparent)',
+                    }}
+                    title="โฆษณานี้กำลังถูกใช้เป็น calibration ให้ Judge ตอนประเมิน ad ตัวใหม่"
+                  >
+                    <Target className="w-2.5 h-2.5" strokeWidth={1.5} aria-hidden="true" />
+                    calibrating judge
+                  </span>
+                )}
+              </div>
 
               {/* Actions */}
               <div className="flex items-center gap-1 shrink-0">

@@ -4,12 +4,10 @@ import { useMiroFishSim, type SimStage } from '../hooks/useMiroFishSim';
 import { isMiroFishConfigured, miroFishUrl } from '../lib/mirofish-client';
 import type { AdIdea } from '../services/marketing-agent';
 import type { BrandFact } from '../lib/brand-facts';
-import type { CustomerQuote } from '../lib/customer-quotes';
 
 interface Props {
   readonly ad?: AdIdea | null;
   readonly brandFacts?: readonly BrandFact[];
-  readonly customerQuotes?: readonly CustomerQuote[];
 }
 
 const STAGE_LABEL: Record<SimStage, string> = {
@@ -38,25 +36,15 @@ const STAGE_COLOR: Record<SimStage, string> = {
   cancelled: 'var(--color-fg-3)',
 };
 
-const seedFromBrandData = (
-  brandFacts: readonly BrandFact[],
-  quotes: readonly CustomerQuote[],
-): string => {
+const seedFromBrandData = (brandFacts: readonly BrandFact[]): string => {
   const factsBlock = brandFacts
     .filter(f => f.enabled && f.value.trim())
     .map(f => `${f.label}: ${f.value}`)
     .join('\n');
-  const quotesBlock = quotes
-    .filter(q => q.enabled && q.quote.trim())
-    .map(q => `[${q.persona}] "${q.quote}"${q.context ? ` (${q.context})` : ''}`)
-    .join('\n\n');
 
   return `=== Marnthara ม่านธารา ร้านม่านในลพบุรี ===
 
 ${factsBlock || '(ไม่มี brand facts)'}
-
-=== เสียงลูกค้าจริง ===
-${quotesBlock || '(ไม่มี customer quotes)'}
 
 === บริบทตลาด ===
 ลพบุรี-สิงห์บุรี-อ่างทอง — อากาศร้อนทั้งปี, ตลาด home improvement กลุ่ม middle income,
@@ -64,7 +52,7 @@ ${quotesBlock || '(ไม่มี customer quotes)'}
 `;
 };
 
-export function CommunitySimulationPanel({ ad, brandFacts = [], customerQuotes = [] }: Props) {
+export function CommunitySimulationPanel({ ad, brandFacts = [] }: Props) {
   const { state, start, cancel, reset, running } = useMiroFishSim();
   const [requirement, setRequirement] = useState(
     ad
@@ -72,7 +60,7 @@ export function CommunitySimulationPanel({ ad, brandFacts = [], customerQuotes =
       : 'วิเคราะห์พฤติกรรมและความสนใจของชุมชนเกี่ยวกับการตกแต่งบ้านในลพบุรี',
   );
   const [seedText, setSeedText] = useState<string>(() =>
-    seedFromBrandData(brandFacts, customerQuotes),
+    seedFromBrandData(brandFacts),
   );
   const [maxRounds, setMaxRounds] = useState(24);
 

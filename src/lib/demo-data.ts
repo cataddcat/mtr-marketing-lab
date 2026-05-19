@@ -10,10 +10,10 @@
  * Designed for Marnthara's market context (Lopburi curtain shop).
  */
 
-import type { CustomerQuote } from './customer-quotes';
 import type { StrategyBrief } from './strategy-brief';
-import type { AdEvaluation, ParsedAdIdea } from './schemas';
+import type { AdEvaluation, CommunitySim, ParsedAdIdea } from './schemas';
 import type { PerformanceMetrics } from './performance';
+import type { BrandFact } from './brand-facts';
 import { campaignHashOf } from './strategy-brief';
 
 // ════════════════════════════════════════════════════════════════════
@@ -34,6 +34,150 @@ const DEMO_BRIEF_HASH = campaignHashOf(
   'ม่านลอนเทปผ้า blackout (รุ่น hotel grade)',
   'ประเมินหน้างานฟรี + ผ่อน 0% 3 เดือน · ลพบุรี-สิงห์บุรี-อ่างทอง · ภายใน 31 พ.ค.',
 );
+
+// ════════════════════════════════════════════════════════════════════
+// Community simulation results (Track E.M2)
+// Pre-baked MiroFish outputs attached to each demo ad — lets the user
+// inspect the CommunitySimulationPanel UI end-to-end without spinning
+// up the MiroFish backend. Numbers chosen to contrast the two ads:
+//   A = utility/family ad → high trust, mid virality
+//   B = GenZ aesthetic ad → high virality, lower trust
+// ════════════════════════════════════════════════════════════════════
+
+const SIM_RUN_AT_A = new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(); // 3 days ago
+const SIM_RUN_AT_B = new Date(Date.now() - 1000 * 60 * 60 * 36).toISOString();     // 36h ago
+
+const DEMO_COMMUNITY_SIM_A: CommunitySim = {
+  sim_id: 'demo-sim-A-warmfamily',
+  project_id: 'demo-mirofish-marnthara',
+  run_at: SIM_RUN_AT_A,
+  config: { agent_count: 24, rounds: 12 },
+  sentiment: { positive: 62, neutral: 25, negative: 13 },
+  click_intent: 67,
+  trust_score: 4.3,
+  virality_signal: 28,
+  top_objections: [
+    {
+      text: 'ราคาเริ่ม ฿1,200/ตรม. รวม 4 ห้องก็ยัง ฿20,000+ — เกินงบครอบครัว',
+      count: 5,
+    },
+    {
+      text: 'ทีมประเมินเข้าวันธรรมดาไม่ได้ ทำงานเช้า-เย็น เสาร์-อาทิตย์ติดประชุม',
+      count: 4,
+    },
+    {
+      text: 'ยังไม่เห็นบ้านลพบุรีจริงๆ before/after พร้อมตัวเลขค่าไฟ',
+      count: 3,
+    },
+    {
+      text: 'บ้านเช่า เจ้าของหอไม่อนุญาตเจาะติด — มีแบบไม่เจาะไหม',
+      count: 2,
+    },
+    {
+      text: 'รับประกัน 3 ปี ดี แต่งานติดตั้งแค่ 1 ปี กลัวรอยรั่วของผนัง',
+      count: 2,
+    },
+  ],
+  representative_quotes: [
+    {
+      persona: 'พ่อบ้านบ้านโพธิ์ · กำลังตัดสินใจ · LINE group ครอบครัว',
+      text: 'ค่าไฟผมเดือนละ 3,500 บาท ถ้าลดได้จริง 4-6°C น่าจะคุ้มผ่อน 3 เดือน — จะคุยกับภรรยาแล้วนัดประเมินสุดสัปดาห์นี้',
+      stance: 'positive',
+    },
+    {
+      persona: 'แม่บ้านเขาพระงาม · มีลูกเล็ก 2 คน',
+      text: 'ลูกๆ นอนกลางวัน ห้องร้อนทุกบ่าย รับประกัน 3 ปีก็ดี แต่อยากเห็นภาพห้องนอนคนอื่นจริงๆ ที่ไม่ใช่ภาพ stock — น่าจะกดทักเลย',
+      stance: 'positive',
+    },
+    {
+      persona: 'พ่อบ้านท่าหิน · เทียบหลายเจ้า',
+      text: 'ผ่อน 0% ดี แต่ ฿1,200 คูณ 4 ห้องก็ ฿20,000+ ขอเก็บไว้ก่อน หาเปรียบกับร้านในเมือง — ถ้าเห็นรีวิวลูกค้าคงตัดสินใจง่ายขึ้น',
+      stance: 'neutral',
+    },
+    {
+      persona: 'เจ้าของคาเฟ่ลพบุรี · คิดอยู่',
+      text: 'ส่วนใหญ่พูดเรื่องห้องนอน แต่ร้านผมขนาด 60 ตรม. สไตล์มินิมอล — ทำแยก B2B + ออกใบกำกับภาษีได้ไหม? ขอข้อมูลเพิ่ม',
+      stance: 'neutral',
+    },
+    {
+      persona: 'แม่บ้านเช่าหอ · บ้านเช่า',
+      text: 'อยู่หอเช่าเจ้าของไม่ให้เจาะติด แล้วก็ของเค้าก็เป็นแบบเจาะรูที่ฝา — มีรุ่นไม่เจาะหรือคลิปแขวนไหม จะได้เรียก',
+      stance: 'negative',
+    },
+    {
+      persona: 'GenZ คอนโด · ไม่ใช่กลุ่มเป้าหมาย',
+      text: 'ดูเหมือนโฆษณาสำหรับพ่อๆ แม่ๆ ไม่ใช่ห้องผม tone ทางการเกินไป — มีรุ่นที่เป็น aesthetic vibe-first บ้างไหม',
+      stance: 'negative',
+    },
+  ],
+  responses_total: 24,
+};
+
+const DEMO_COMMUNITY_SIM_B: CommunitySim = {
+  sim_id: 'demo-sim-B-genzpov',
+  project_id: 'demo-mirofish-marnthara',
+  run_at: SIM_RUN_AT_B,
+  config: { agent_count: 24, rounds: 12 },
+  sentiment: { positive: 54, neutral: 21, negative: 25 },
+  click_intent: 52,
+  trust_score: 3.2,
+  virality_signal: 76,
+  top_objections: [
+    {
+      text: 'ไม่บอกราคาเลย เปิดมาสวยแต่ไม่รู้กี่บาท ขอเลยทันที',
+      count: 6,
+    },
+    {
+      text: 'ดูเหมือน Pinterest post ไม่ใช่โฆษณา ไม่รู้กำลังขายอะไรกันแน่',
+      count: 5,
+    },
+    {
+      text: '"ทักมาคุยก่อน" CTA หลวมเกิน ไม่ specific ว่าทักไปแล้วได้อะไร',
+      count: 3,
+    },
+    {
+      text: 'POV นี้ส่งให้แม่ดูไม่ได้ พ่อแม่ไม่เข้าใจภาษาวัยรุ่น',
+      count: 2,
+    },
+    {
+      text: 'อยากเห็นว่าจริงม่านลด 4-6°C ยังไง มีคนวัดอุณหภูมิจริงไหม',
+      count: 2,
+    },
+  ],
+  representative_quotes: [
+    {
+      persona: 'GenZ นักศึกษา · จะแชร์ LINE group เพื่อน',
+      text: 'ฉ่ำมาก save แล้วส่งกลุ่มเพื่อนทันที — golden hour กับห้องนอน soft light คือ aesthetic เป๊ะ แต่งบจำกัด ขอรอเซลโลด',
+      stance: 'positive',
+    },
+    {
+      persona: 'GenZ คอนโด · จะแชร์ IG story',
+      text: 'เพิ่งย้ายเข้าคอนโด ห้องเปลือยมาก โฆษณานี้ทำให้อยากแต่งห้องเลย — ขอข้อมูล DM แล้วค่อยตัดสินใจ ถ้าราคาโอเค',
+      stance: 'positive',
+    },
+    {
+      persona: 'แม่บ้านชานเมือง · ลูกสาวอยากได้',
+      text: 'สวยจริง ลูกสาวเห็นแล้วบอกอยากได้แบบนี้ในห้อง — แต่ไม่บอกราคา ก็กลัวว่าแพง ไม่กล้าทักไป',
+      stance: 'neutral',
+    },
+    {
+      persona: 'พ่อบ้านชนบท · ดูซ้ำสองรอบ',
+      text: 'POV คืออะไร ภาษาวัยรุ่นไม่ค่อยเข้าใจ — แต่ visual ก็คือผ้าม่านนะ ผมไม่ใช่กลุ่มหรอก แต่จะส่งให้ลูกสาวดู',
+      stance: 'neutral',
+    },
+    {
+      persona: 'นักศึกษาบ้านเช่า · รอเก็บเงิน 3 เดือน',
+      text: 'save ไว้ใน collection "ห้องที่อยากแต่ง" ถ้าจะติดต้องรออีก 3-4 เดือน — น่าจะกลับมาดูทีหลัง',
+      stance: 'neutral',
+    },
+    {
+      persona: 'เจ้าของออฟฟิศ · ไม่ใช่กลุ่มเป้าหมาย',
+      text: 'ไม่ใช่ลูกค้ากลุ่มนี้แน่ ออฟฟิศต้องการม่านกัน UV + ใบกำกับภาษี ไม่ใช่ vibe shot — รอ ad ตัวอื่น',
+      stance: 'negative',
+    },
+  ],
+  responses_total: 24,
+};
 
 const fullEvalA: AdEvaluation = {
   panel_verdict: 'พ่อบ้าน-แม่บ้านชอบมาก · GenZ เฉยๆ เพราะภาษาเป็นทางการเกิน',
@@ -134,6 +278,7 @@ const fullEvalA: AdEvaluation = {
       note: 'CTR คาดที่ ~1.8% ใกล้ p50 ของ FB Feed niche ตกแต่งบ้าน',
     },
   },
+  community_sim: DEMO_COMMUNITY_SIM_A,
 };
 
 const fullEvalB: AdEvaluation = {
@@ -197,6 +342,7 @@ const fullEvalB: AdEvaluation = {
     },
   ],
   average_score: 5.1,
+  community_sim: DEMO_COMMUNITY_SIM_B,
 };
 
 const briefDraftedAt = new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(); // 2 days ago
@@ -399,42 +545,94 @@ const DEMO_SAVED_ADS: SavedAdLike[] = [
 ];
 
 // ════════════════════════════════════════════════════════════════════
-// Customer quotes — replace defaults with realistic enabled quotes
+// Brand facts — realistic overrides for the demo bundle
+// Overrides the placeholder phone in DEFAULT_BRAND_FACTS and adds two
+// custom facts (portfolio + cooling test) so the Judge / ad generator
+// has richer ground truth to anchor copy.
 // ════════════════════════════════════════════════════════════════════
 
-const DEMO_QUOTES: CustomerQuote[] = [
+const DEMO_BRAND_FACTS: BrandFact[] = [
   {
-    id: 'demo-q-1',
-    persona: 'family_man',
-    quote:
-      'ติดให้แล้วค่าไฟลดจริง เดือนละ 400-500 บาท คุ้มมาก ทีมงานสุภาพ ติดเสร็จในวันเดียว — ลพบุรีตอนนี้ 39°C ห้องเย็นกว่าก่อนเยอะ',
-    context: 'พ่อบ้านลพบุรี · ติดม่าน 4 ห้อง · มิ.ย. 2025',
+    id: 'warranty',
+    label: 'การรับประกัน',
+    value: '3 ปี (วัสดุ) + 1 ปี (งานติดตั้ง) · เปลี่ยนเทปอัตโนมัติฟรีตลอดอายุ',
+    enabled: true,
+    isDefault: true,
+  },
+  {
+    id: 'service_area',
+    label: 'พื้นที่บริการ',
+    value: 'ลพบุรี · สิงห์บุรี · อ่างทอง · อยุธยา (รัศมี ~80 กม. ไม่มีค่าเดินทาง)',
+    enabled: true,
+    isDefault: true,
+  },
+  {
+    id: 'price_start',
+    label: 'ราคาเริ่มต้น',
+    value: 'เริ่มต้น ฿1,200/ตรม. (ผ้า blackout เกรดโรงแรม) · ประเมินหน้างานฟรี',
+    enabled: true,
+    isDefault: true,
+  },
+  {
+    id: 'free_quote',
+    label: 'การประเมินหน้างาน',
+    value: 'นัดประเมินฟรี ไม่บังคับซื้อ · ส่งใบเสนอราคาภายใน 24 ชม.',
+    enabled: true,
+    isDefault: true,
+  },
+  {
+    id: 'line_id',
+    label: 'LINE',
+    value: '@marnthara',
+    enabled: true,
+    isDefault: true,
+  },
+  {
+    id: 'phone',
+    label: 'โทรศัพท์',
+    value: '081-234-5678 (คุณก้อย ผู้จัดการร้าน)',
+    enabled: true,
+    isDefault: true,
+  },
+  {
+    id: 'hours',
+    label: 'เวลาทำการ',
+    value: '09:00-21:00 ทุกวัน (ไม่หยุด นักขัตฤกษ์เปิดปกติ)',
+    enabled: true,
+    isDefault: true,
+  },
+  {
+    id: 'material',
+    label: 'จุดเด่นวัสดุ',
+    value: 'ผ้านำเข้าเกาหลี ทนแดดลพบุรี 8-10 ปี · กันแสง 99% · ป้องกัน UV',
+    enabled: true,
+    isDefault: true,
+  },
+  {
+    id: 'install_team',
+    label: 'ทีมติดตั้ง',
+    value: 'ช่างประจำของร้าน 4 คน (ไม่ใช้ subcontract) · ติดเสร็จในวันเดียว',
+    enabled: true,
+    isDefault: true,
+  },
+  {
+    id: 'payment',
+    label: 'การชำระเงิน',
+    value: 'เงินสด · โอน · บัตรเครดิต · ผ่อน 0% 3 เดือน (ไม่มีค่าธรรมเนียม)',
+    enabled: true,
+    isDefault: true,
+  },
+  {
+    id: 'demo-portfolio',
+    label: 'ผลงานล่าสุด',
+    value: 'โรงแรมบูทีค 12 ห้อง สิงห์บุรี · คาเฟ่ Yard Lopburi · บ้านเดี่ยวหมู่บ้าน Casa De Lopburi 50+ หลัง',
     enabled: true,
     isDefault: false,
   },
   {
-    id: 'demo-q-2',
-    persona: 'housewife',
-    quote:
-      'ตอนแรกกลัวซักไม่ออก ปรากฏเอาออกซักได้สบาย ฝุ่นลพบุรีเยอะแต่ม่านยังดูใหม่ ลูกแพ้ฝุ่นน้อยลงด้วย',
-    context: 'แม่บ้านวังเหนือ · ใช้มา 8 เดือน',
-    enabled: true,
-    isDefault: false,
-  },
-  {
-    id: 'demo-q-3',
-    persona: 'businessman',
-    quote:
-      'ร้านกาแฟผมต้องการ vibe เฉพาะ ทีมเค้าเข้ามาเสนอ option หลายแบบ ไม่ฮาร์ดเซลล์ ออกใบกำกับภาษีเรียบร้อย ติดเสร็จก่อนเปิดร้าน',
-    context: 'เจ้าของคาเฟ่ลพบุรี · 12 ที่นั่ง',
-    enabled: true,
-    isDefault: false,
-  },
-  {
-    id: 'demo-q-4',
-    persona: 'genz',
-    quote: 'ปังมาก ฉ่ำ ห้องเปลี่ยน vibe ไปเลย เพื่อนมานอนเล่นบอกอยู่ยาว 🌙',
-    context: 'นักศึกษาคอนโด ลพบุรี · 1 ห้องนอน',
+    id: 'demo-cooling',
+    label: 'ผลทดสอบเย็น',
+    value: 'วัดด้วย thermometer ลพบุรี เม.ย. 2025 — ลด 4-6°C ในห้องนอน แสงแดด direct 14:00-16:00',
     enabled: true,
     isDefault: false,
   },
@@ -446,14 +644,18 @@ const DEMO_QUOTES: CustomerQuote[] = [
 
 const KEYS = {
   savedAds: 'mtr_saved_ads',
-  quotes: 'mtr_customer_quotes',
   briefs: 'mtr_strategy_briefs',
+  brandFacts: 'mtr_brand_facts',
 } as const;
+
+// Legacy localStorage key — wiped on demo apply/clear so old browsers
+// don't keep stale customer-quotes data after the feature was removed.
+const LEGACY_KEYS_TO_PURGE = ['mtr_customer_quotes'] as const;
 
 export interface DemoBundleSummary {
   savedAds: number;
-  quotes: number;
   briefs: number;
+  brandFacts: number;
 }
 
 export const applyDemoBundle = (): DemoBundleSummary => {
@@ -463,27 +665,32 @@ export const applyDemoBundle = (): DemoBundleSummary => {
     console.warn('[demo-data] failed to write savedAds', err);
   }
   try {
-    localStorage.setItem(KEYS.quotes, JSON.stringify(DEMO_QUOTES));
-  } catch (err) {
-    console.warn('[demo-data] failed to write quotes', err);
-  }
-  try {
     localStorage.setItem(KEYS.briefs, JSON.stringify([DEMO_BRIEF]));
   } catch (err) {
     console.warn('[demo-data] failed to write briefs', err);
   }
+  try {
+    localStorage.setItem(KEYS.brandFacts, JSON.stringify(DEMO_BRAND_FACTS));
+  } catch (err) {
+    console.warn('[demo-data] failed to write brandFacts', err);
+  }
+  // Wipe legacy keys we no longer use.
+  for (const k of LEGACY_KEYS_TO_PURGE) {
+    try { localStorage.removeItem(k); } catch { /* ignore */ }
+  }
   return {
     savedAds: DEMO_SAVED_ADS.length,
-    quotes: DEMO_QUOTES.length,
     briefs: 1,
+    brandFacts: DEMO_BRAND_FACTS.length,
   };
 };
 
 export const clearDemoBundle = (): void => {
   try {
     localStorage.removeItem(KEYS.savedAds);
-    localStorage.removeItem(KEYS.quotes);
     localStorage.removeItem(KEYS.briefs);
+    localStorage.removeItem(KEYS.brandFacts);
+    for (const k of LEGACY_KEYS_TO_PURGE) localStorage.removeItem(k);
   } catch (err) {
     console.warn('[demo-data] clear failed', err);
   }
@@ -509,5 +716,6 @@ export const isDemoLoaded = (): boolean => {
 export const DEMO_DATA = {
   savedAds: DEMO_SAVED_ADS,
   brief: DEMO_BRIEF,
-  quotes: DEMO_QUOTES,
+  brandFacts: DEMO_BRAND_FACTS,
+  communitySim: { adA: DEMO_COMMUNITY_SIM_A, adB: DEMO_COMMUNITY_SIM_B },
 } as const;

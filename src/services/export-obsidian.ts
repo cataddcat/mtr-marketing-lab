@@ -23,7 +23,6 @@ import {
   type ChannelId,
   type PersonaId,
 } from '../lib/schemas';
-import type { CustomerQuote } from '../lib/customer-quotes';
 import { isPerformanceEmpty } from '../lib/performance';
 
 const VAULT_ROOT = 'Marnthara-Marketing';
@@ -125,37 +124,6 @@ const renderBrandFactsNote = (input: ExportInput): string => {
 ข้อเท็จจริงเฉพาะของร้านม่านธารา — single source of truth ที่ AI อ้างอิงเสมอ
 
 ${rows || '_(ไม่มี facts ที่เปิดใช้)_'}
-`;
-};
-
-const renderQuotesNote = (input: ExportInput): string => {
-  const enabled = input.customerQuotes.filter(q => q.enabled && q.quote.trim());
-  const byPersona = new Map<PersonaId, CustomerQuote[]>();
-  for (const q of enabled) {
-    const arr = byPersona.get(q.persona) ?? [];
-    arr.push(q);
-    byPersona.set(q.persona, arr);
-  }
-  const fm = renderFrontmatter({
-    type: 'customer_quotes',
-    count: enabled.length,
-    exported_at: input.exportedAt,
-  });
-  const sections: string[] = [];
-  for (const [pid, label] of Object.entries(PERSONA_LABELS) as [PersonaId, string][]) {
-    const list = byPersona.get(pid) ?? [];
-    if (list.length === 0) continue;
-    sections.push(
-      `## ${label}\n${list
-        .map(q => `> ${q.quote}${q.context ? `\n> — _${q.context}_` : ''}`)
-        .join('\n\n')}`,
-    );
-  }
-  return `${fm}# 💬 Customer Voice (จริง)
-
-คำพูดของลูกค้าจริง — Judge ใช้เป็น tone reference เวลาประเมิน ad
-
-${sections.join('\n\n') || '_(ยังไม่มี quote ที่เปิดใช้)_'}
 `;
 };
 
@@ -409,11 +377,28 @@ ${adLinks}
 // Canvas builders
 // ════════════════════════════════════════════════════════════════════
 
+// Obsidian Canvas only has 6 system colors (1=red, 2=orange, 3=yellow,
+// 4=green, 5=cyan, 6=purple). We have 15 personas, so we cycle the palette
+// while keeping the original 4 on their historic colors for visual continuity.
 const PERSONA_COLOR: Record<PersonaId, CanvasNodeColor> = {
-  family_man: '4', // green
-  housewife: '3', // yellow
+  // Original 4 — preserved colors so old exports look unchanged.
+  family_man: '4',  // green
+  housewife: '3',   // yellow
   businessman: '5', // cyan
-  genz: '6', // purple
+  genz: '6',        // purple
+  // Refined splits of the original 4 — same hue family.
+  family_man_commuter:   '4',
+  housewife_urban:       '3',
+  businessman_hotelier:  '5',
+  genz_first_condo:      '6',
+  // New segments — distribute across remaining hues.
+  contractor:               '2', // orange
+  interior_designer:        '1', // red
+  millennial_remote_worker: '6', // purple
+  retiree_downsize:         '4', // green
+  landlord_rental:          '5', // cyan
+  wedding_couple:           '3', // yellow
+  price_hunter:             '1', // red
 };
 
 const buildPersonaPanelCanvas = (
@@ -423,8 +408,17 @@ const buildPersonaPanelCanvas = (
   const nodes: CanvasNode[] = [];
   const edges: CanvasEdge[] = [];
 
-  // 4 persona nodes in a row
-  const personaIds: PersonaId[] = ['family_man', 'housewife', 'businessman', 'genz'];
+  // Only render personas that actually have ≥1 strong ad assignment.
+  // With 15 personas in the pool, drawing all of them every export would
+  // mostly produce empty nodes — show only what the user's library proves
+  // is relevant. Wraps to a 5-per-row grid for readability.
+  const activePersonas = new Set<PersonaId>();
+  for (const row of rows) {
+    for (const pid of row.strongPersonas) activePersonas.add(pid);
+  }
+  const personaIds: PersonaId[] = [...activePersonas];
+  const PERSONAS_PER_ROW = 5;
+  const PERSONA_ROW_HEIGHT = 160; // 120 node + 40 gap
   const personaNodeIds: Record<PersonaId, string> = {} as Record<PersonaId, string>;
   personaIds.forEach((pid, i) => {
     const nid = canvasId('persona');
@@ -433,15 +427,18 @@ const buildPersonaPanelCanvas = (
       id: nid,
       type: 'file',
       file: `02-Personas/${registry.link(`persona:${pid}`)}.md`,
-      x: i * 360,
-      y: 0,
+      x: (i % PERSONAS_PER_ROW) * 360,
+      y: Math.floor(i / PERSONAS_PER_ROW) * PERSONA_ROW_HEIGHT,
       width: 280,
       height: 120,
       color: PERSONA_COLOR[pid],
     });
   });
 
-  // Ad nodes below — linked to personas that scored them ≥ 7
+  // Ad nodes below — linked to personas that scored them ≥ 7.
+  // Push down by the height of the persona block (may be 1-3 rows now).
+  const personaRowCount = Math.max(1, Math.ceil(personaIds.length / PERSONAS_PER_ROW));
+  const adOriginY = personaRowCount * PERSONA_ROW_HEIGHT + 120;
   let adIndex = 0;
   for (const row of rows) {
     if (row.strongPersonas.length === 0) continue;
@@ -450,7 +447,7 @@ const buildPersonaPanelCanvas = (
       cellWidth: 260,
       cellHeight: 140,
       gap: 28,
-      originY: 280,
+      originY: adOriginY,
     });
     const adNid = canvasId('ad');
     nodes.push({
@@ -622,12 +619,6 @@ export const buildVault = (input: ExportInput, options: VaultExportOptions = {})
     });
   }
 
-  // 06-Customer-Voice
-  files.push({
-    path: `${prefix}06-Customer-Voice/${registry.link('quotes')}.md`,
-    content: renderQuotesNote(input),
-  });
-
   // 08-Canvas
   files.push({
     path: `${prefix}08-Canvas/${registry.link('canvas-persona')}.canvas`,
@@ -674,7 +665,6 @@ ${(Object.keys(CHANNEL_LABELS) as ChannelId[])
 
 ## Counts
 - Brand facts: ${input.brandFacts.filter(f => f.enabled).length}
-- Customer quotes: ${input.customerQuotes.filter(q => q.enabled).length}
 - Strategy briefs: ${input.briefs.length}
 - Saved ads: ${input.savedAds.length}
 - Feedback signals captured: ${input.feedback.length}

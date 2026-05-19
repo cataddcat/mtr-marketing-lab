@@ -1,5 +1,11 @@
 import * as v from 'valibot';
-import { ChannelIdSchema, PersonaIdSchema, type ChannelId, type PersonaId } from './schemas';
+import {
+  ChannelIdSchema,
+  PersonaIdSchema,
+  PERSONA_LABELS,
+  type ChannelId,
+  type PersonaId,
+} from './schemas';
 
 // ════════════════════════════════════════════════════════════════════
 // Atomic schemas
@@ -210,13 +216,7 @@ const CHANNEL_TH_LABEL: Record<ChannelId, string> = {
 
 const personaLabel = (id: PersonaId | null): string => {
   if (!id) return '—';
-  const map: Record<PersonaId, string> = {
-    family_man: 'พ่อบ้าน',
-    housewife: 'แม่บ้าน',
-    businessman: 'เจ้าของธุรกิจ',
-    genz: 'GenZ',
-  };
-  return map[id];
+  return PERSONA_LABELS[id];
 };
 
 // ════════════════════════════════════════════════════════════════════

@@ -5,7 +5,6 @@
  */
 
 import type { BrandFact } from './brand-facts';
-import type { CustomerQuote } from './customer-quotes';
 import type { StrategyBrief } from './strategy-brief';
 import type { AdEvaluation, PersonaId } from './schemas';
 import type { PerformanceMetrics } from './performance';
@@ -26,7 +25,6 @@ export interface SavedAdLike {
 
 export interface ExportInput {
   readonly brandFacts: readonly BrandFact[];
-  readonly customerQuotes: readonly CustomerQuote[];
   readonly briefs: readonly StrategyBrief[];
   readonly savedAds: readonly SavedAdLike[];
   readonly feedback: readonly FeedbackRecord[];

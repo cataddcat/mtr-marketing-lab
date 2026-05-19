@@ -11,11 +11,37 @@ export const AdIdeaSchema = v.object({
 
 export const AdIdeaArraySchema = v.array(AdIdeaSchema);
 
+// ════════════════════════════════════════════════════════════════════
+// Persona pool — expanded from 4 → 15 (Track F3).
+// The original 4 IDs (family_man / housewife / businessman / genz) are
+// PRESERVED so existing saved ads, demo data, and Strategy Brief segments
+// keep working without migration. The 11 new IDs cover the long-tail
+// audiences the original 4 were too coarse to describe (Bkk-commuter
+// pa-baan, urban-condo housewife, hotelier, contractor, etc.).
+//
+// The Judge is now told to pick 3-6 RELEVANT personas from the pool —
+// not score the entire 15 every call (that would blow the token budget
+// for little signal). See PersonaEvalSchema's relaxed length constraint.
+// ════════════════════════════════════════════════════════════════════
 export const PersonaIdSchema = v.picklist([
+  // Original 4 — kept for backward compatibility with existing saved ads.
   'family_man',
   'housewife',
   'businessman',
   'genz',
+  // Refined splits of the original 4.
+  'family_man_commuter',
+  'housewife_urban',
+  'businessman_hotelier',
+  'genz_first_condo',
+  // New segments uncovered by the original 4.
+  'contractor',
+  'interior_designer',
+  'millennial_remote_worker',
+  'retiree_downsize',
+  'landlord_rental',
+  'wedding_couple',
+  'price_hunter',
 ] as const);
 
 export const ConfidenceSchema = v.picklist(['high', 'med', 'low'] as const);
@@ -171,7 +197,10 @@ export const AdEvaluationSchema = v.object({
   trends_used: v.array(v.string()),
   structure: StructureScoreSchema,
   channel_fit: ChannelFitSchema,
-  personas: v.pipe(v.array(PersonaEvalSchema), v.length(4)),
+  // Loosened from exact length 4 to a 3-6 range so the Judge can pick the
+  // most relevant subset from the 15-persona pool instead of scoring all 15
+  // (token explosion) or always being stuck with the original 4 (too coarse).
+  personas: v.pipe(v.array(PersonaEvalSchema), v.minLength(3), v.maxLength(6)),
   average_score: score,
   // Optional client-side metadata — never produced by the LLM. Set after
   // aggregating multiple judge runs (ensemble) so the UI can show stability.
@@ -220,8 +249,60 @@ export const personaAverage = (p: PersonaEval): number =>
   (p.scroll_stop_score + p.focused_score + p.memory_score) / 3;
 
 export const PERSONA_LABELS: Record<PersonaId, string> = {
-  family_man: 'พ่อบ้าน',
-  housewife: 'แม่บ้าน',
-  businessman: 'เจ้าของธุรกิจ',
-  genz: 'GenZ',
+  // Original 4 — labels refined to reflect the typical Marnthara segment.
+  family_man: 'พ่อบ้านลพบุรี',
+  housewife: 'แม่บ้านชานเมือง',
+  businessman: 'เจ้าของธุรกิจขนาดเล็ก',
+  genz: 'นักศึกษา/GenZ หอ',
+  // Refined splits.
+  family_man_commuter: 'พ่อบ้าน กทม.-ปริมณฑล',
+  housewife_urban: 'แม่บ้านคอนโดเมือง',
+  businessman_hotelier: 'เจ้าของโรงแรมบูทีค',
+  genz_first_condo: 'GenZ คอนโดใหม่',
+  // New segments.
+  contractor: 'รับเหมา/ตกแต่งภายใน',
+  interior_designer: 'นักออกแบบ interior',
+  millennial_remote_worker: 'มิลเลนเนียล WFH',
+  retiree_downsize: 'ผู้สูงวัยปรับปรุงบ้าน',
+  landlord_rental: 'เจ้าของบ้านให้เช่า',
+  wedding_couple: 'คู่แต่งงานใหม่',
+  price_hunter: 'นักล่าราคาถูก',
+};
+
+/**
+ * Persona pool metadata — used by the Judge prompt to know which personas
+ * to consider, and by future UI selectors. Keep descriptions short (under
+ * 120 chars) so the prompt stays compact.
+ */
+export const PERSONA_DESCRIPTIONS: Record<PersonaId, string> = {
+  family_man:
+    'พ่อบ้าน 35-55 ตจว. มีลูก-มีบ้านเดี่ยว ใส่ใจค่าไฟ/warranty มากกว่า aesthetic',
+  housewife:
+    'แม่บ้าน 35-55 ชานเมือง ตกแต่งบ้านเอง ใส่ใจ "ดูแล้วน่าอยู่ ลูกแพ้ฝุ่นน้อย"',
+  businessman:
+    'เจ้าของธุรกิจเล็ก (ร้าน/คาเฟ่/สปา) ต้องการ vibe + ออกใบกำกับภาษี + งานเสร็จก่อนเปิดร้าน',
+  genz:
+    'นักศึกษาหอ/คอนโด 19-23 งบ ฿2-5k เน้น aesthetic + share IG/TikTok',
+  family_man_commuter:
+    'พ่อบ้าน กทม.-ปริมณฑล 30-45 ผ่อนบ้าน ทำงาน 9-5 ตัดสินใจเรื่องบ้านร่วมกับภรรยา',
+  housewife_urban:
+    'แม่บ้านคอนโดเมือง 28-40 รายได้สูง ใส่ใจ designer/brand-name + curated look',
+  businessman_hotelier:
+    'เจ้าของโรงแรมบูทีค/รีสอร์ต ต้องการ batch order, premium fabric, ดูดี-ทน-ซักได้',
+  genz_first_condo:
+    'GenZ 22-28 เพิ่งย้ายเข้าคอนโดแรก งบ ฿5-10k/ห้อง mood-driven, vibe-first',
+  contractor:
+    'รับเหมา/ตกแต่งภายใน refer client เน้น margin + งานเร็ว + ไม่มีปัญหากับ end customer',
+  interior_designer:
+    'นักออกแบบ interior เน้น fabric library, custom color, สั่งทำ + ทันโปรเจกต์',
+  millennial_remote_worker:
+    'WFH 30-38 ตกแต่งห้องทำงานบ้าน ใส่ใจกันแสง + เสียง + Zoom background',
+  retiree_downsize:
+    'ผู้สูงวัย 55+ ปรับปรุงบ้านเก่า เน้น "ทน-ซักง่าย-ไม่ต้องเปลี่ยนบ่อย"',
+  landlord_rental:
+    'เจ้าของบ้าน/คอนโด ให้เช่า ต้องการ "ดูดีในรูป + ราคาประหยัด + ติดเร็ว"',
+  wedding_couple:
+    'คู่แต่งงานใหม่ ตกแต่งบ้านครั้งแรก งบใหญ่ ตัดสินใจร่วม ใส่ใจ "สวย-ทน-คุ้ม"',
+  price_hunter:
+    'ลูกค้าที่หาราคาถูกที่สุด — รับ promo, ต่อรอง, เปรียบ 3 ร้าน, deal-driven',
 };
