@@ -12,37 +12,19 @@ export const AdIdeaSchema = v.object({
 export const AdIdeaArraySchema = v.array(AdIdeaSchema);
 
 // ════════════════════════════════════════════════════════════════════
-// Persona pool — expanded from 4 → 15 (Track F3).
-// The original 4 IDs (family_man / housewife / businessman / genz) are
-// PRESERVED so existing saved ads, demo data, and Strategy Brief segments
-// keep working without migration. The 11 new IDs cover the long-tail
-// audiences the original 4 were too coarse to describe (Bkk-commuter
-// pa-baan, urban-condo housewife, hotelier, contractor, etc.).
+// Persona ID — open-string schema (Track F-option-A · 40-50 personas pool).
 //
-// The Judge is now told to pick 3-6 RELEVANT personas from the pool —
-// not score the entire 15 every call (that would blow the token budget
-// for little signal). See PersonaEvalSchema's relaxed length constraint.
+// Previously a `picklist` of 4 → then 15 hardcoded IDs. Now opened to ANY
+// string so the user can grow the pool dynamically by expanding Strategy
+// Brief segments into 6-10 sub-variants each. Labels & descriptions move
+// out of this schema and into `persona-pool.ts` as a Persona-record
+// catalog. Reads of an unknown ID fall back to the ID itself as label.
+//
+// The 15 IDs from the previous expansion are preserved as the "core"
+// pool (loaded from persona-pool.ts) so legacy saved ads + demo data
+// still render correctly. Newly expanded personas can have any slug.
 // ════════════════════════════════════════════════════════════════════
-export const PersonaIdSchema = v.picklist([
-  // Original 4 — kept for backward compatibility with existing saved ads.
-  'family_man',
-  'housewife',
-  'businessman',
-  'genz',
-  // Refined splits of the original 4.
-  'family_man_commuter',
-  'housewife_urban',
-  'businessman_hotelier',
-  'genz_first_condo',
-  // New segments uncovered by the original 4.
-  'contractor',
-  'interior_designer',
-  'millennial_remote_worker',
-  'retiree_downsize',
-  'landlord_rental',
-  'wedding_couple',
-  'price_hunter',
-] as const);
+export const PersonaIdSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(80));
 
 export const ConfidenceSchema = v.picklist(['high', 'med', 'low'] as const);
 
@@ -79,7 +61,9 @@ export const ChannelFitItemSchema = v.object({
 });
 
 export const ChannelFitSchema = v.object({
-  ranked: v.pipe(v.array(ChannelFitItemSchema), v.minLength(3), v.maxLength(5)),
+  // Judge ranks the top 2-3 channels (down from 5). Asking for all 5 invited
+  // a lazy "2 high · 3 low" template; trimmed to focus on actionable signal.
+  ranked: v.pipe(v.array(ChannelFitItemSchema), v.minLength(2), v.maxLength(3)),
   best: ChannelIdSchema,
   reasoning: v.pipe(v.string(), v.maxLength(240)),
 });
@@ -110,9 +94,6 @@ export const CompetitorComparisonSchema = v.object({
   recommendation: v.pipe(v.string(), v.maxLength(280)),
 });
 
-export const BenchmarkBucketSchema = v.picklist(['above', 'on', 'below'] as const);
-export type BenchmarkBucket = v.InferOutput<typeof BenchmarkBucketSchema>;
-
 export const JtbdCoverageItemSchema = v.object({
   segment_name: nonEmpty,
   score: score,
@@ -125,12 +106,6 @@ export const StrategyFitSchema = v.object({
   jtbd_coverage: v.pipe(v.array(JtbdCoverageItemSchema), v.maxLength(5)),
   whitespace_capture: score,
   whitespace_critique: v.pipe(v.string(), v.maxLength(240)),
-  benchmark_alignment: v.object({
-    channel: ChannelIdSchema,
-    estimated_ctr_pct: v.number(),
-    vs_benchmark: BenchmarkBucketSchema,
-    note: v.pipe(v.string(), v.maxLength(200)),
-  }),
 });
 export type JtbdCoverageItem = v.InferOutput<typeof JtbdCoverageItemSchema>;
 export type StrategyFit = v.InferOutput<typeof StrategyFitSchema>;
@@ -197,16 +172,33 @@ export const AdEvaluationSchema = v.object({
   trends_used: v.array(v.string()),
   structure: StructureScoreSchema,
   channel_fit: ChannelFitSchema,
-  // Loosened from exact length 4 to a 3-6 range so the Judge can pick the
-  // most relevant subset from the 15-persona pool instead of scoring all 15
-  // (token explosion) or always being stuck with the original 4 (too coarse).
-  personas: v.pipe(v.array(PersonaEvalSchema), v.minLength(3), v.maxLength(6)),
+  // Range 3-12: floor 3 matches real B2C practice (3-8 archetypes) and the
+  // observed LLM compliance ceiling (cheaper models like gpt-4o-mini routinely
+  // pick 3 for narrowly-targeted ads even when the prompt asks for 6+).
+  // Sweet-spot range 6-10 is set as a STRONG RECOMMENDATION in the Judge
+  // prompt, not a hard schema rule — staying strict here loops retries
+  // forever instead of letting the user see the output. The upper bound
+  // 12 caps token cost.
+  personas: v.pipe(v.array(PersonaEvalSchema), v.minLength(3), v.maxLength(12)),
   average_score: score,
   // Optional client-side metadata — never produced by the LLM. Set after
   // aggregating multiple judge runs (ensemble) so the UI can show stability.
   ensemble: v.optional(EnsembleMetaSchema),
-  // Optional comparison block — produced by the LLM only when a competitor
-  // ad text is supplied to evaluateAd().
+  // Client-side quality flags detected after parse. Examples:
+  //   'template-pattern'      — scores follow [N, N-1, N-1] lazy pattern
+  //   'low-confidence-panel'  — majority of personas marked confidence=low
+  //   'pleaser-bias'          — every persona scored 5+ on every dimension
+  // Empty array (or omitted) = no issues detected.
+  quality_flags: v.optional(v.array(v.string())),
+  // Judge prompt version that produced this evaluation. Bump JUDGE_PROMPT_VERSION
+  // in marketing-agent.ts whenever the prompt changes — calibration logic
+  // filters out examples from older prompt versions so comparisons stay apples
+  // to apples. Optional for legacy saved ads.
+  prompt_version: v.optional(v.pipe(v.string(), v.maxLength(20))),
+  // Legacy field — kept optional so saved ads from before the side-by-side
+  // refactor still parse out of localStorage. New evaluations never set it;
+  // the LLM-judged winner/margin was hallucination without grounding.
+  // Schema can be removed entirely once legacy localStorage is migrated.
   competitor: v.optional(CompetitorComparisonSchema),
   // Optional strategy-fit block — produced by the LLM only when a
   // StrategyBrief is supplied (Track A Phase 2).
@@ -248,18 +240,85 @@ export const CHANNEL_LABELS: Record<ChannelId, string> = {
 export const personaAverage = (p: PersonaEval): number =>
   (p.scroll_stop_score + p.focused_score + p.memory_score) / 3;
 
-export const PERSONA_LABELS: Record<PersonaId, string> = {
-  // Original 4 — labels refined to reflect the typical Marnthara segment.
+/**
+ * Per-channel dimension weights. Reels/TikTok live or die on the 0.5s
+ * scroll-stop; FB Feed posts are read in full so focused dominates.
+ * Weights sum to 1.0 — multiply by score, sum, get a 0-10 number.
+ *
+ * Reasoning per channel:
+ *   tiktok/reels  : scroll-stop is decisive, focused matters once they pause,
+ *                   memory matters less because the platform is high-churn
+ *   facebook_feed : users actually read the body — focused leads, memory
+ *                   matters because feed is browsed slower
+ *   instagram_feed: aesthetic-first, scroll + memory tied (people save posts)
+ */
+const CHANNEL_DIMENSION_WEIGHTS: Record<ChannelId, { scroll: number; focused: number; memory: number }> = {
+  tiktok:           { scroll: 0.5, focused: 0.2, memory: 0.3 },
+  facebook_reels:   { scroll: 0.5, focused: 0.2, memory: 0.3 },
+  instagram_reels:  { scroll: 0.5, focused: 0.2, memory: 0.3 },
+  facebook_feed:    { scroll: 0.2, focused: 0.5, memory: 0.3 },
+  instagram_feed:   { scroll: 0.35, focused: 0.25, memory: 0.4 },
+};
+
+/** Channel-weighted persona score: emphasize the dimension that decides
+ *  performance on the best-fit channel for this ad. */
+export const personaScoreForChannel = (p: PersonaEval, channel: ChannelId): number => {
+  const w = CHANNEL_DIMENSION_WEIGHTS[channel];
+  return p.scroll_stop_score * w.scroll
+       + p.focused_score     * w.focused
+       + p.memory_score      * w.memory;
+};
+
+/** Confidence weight — Judge's own uncertainty discount. A low-confidence
+ *  panel vote shouldn't move the headline number as much as a high one. */
+const CONFIDENCE_WEIGHT: Record<Confidence, number> = {
+  high: 1.0,
+  med:  0.8,
+  low:  0.5,
+};
+
+/**
+ * Confidence-weighted, channel-weighted panel average.
+ * This is the number that should sit on the headline gauge — it discounts
+ * both Judge uncertainty and dimension that doesn't matter for the best
+ * channel. Falls back to plain personaAverage when channel is null.
+ */
+export const panelAverage = (
+  personas: readonly PersonaEval[],
+  bestChannel: ChannelId | null,
+): number => {
+  if (personas.length === 0) return 0;
+  let weightedSum = 0;
+  let weightTotal = 0;
+  for (const p of personas) {
+    const w = CONFIDENCE_WEIGHT[p.confidence];
+    const score = bestChannel
+      ? personaScoreForChannel(p, bestChannel)
+      : personaAverage(p);
+    weightedSum += score * w;
+    weightTotal += w;
+  }
+  return weightTotal === 0 ? 0 : weightedSum / weightTotal;
+};
+
+/**
+ * Label + description lookups — now open dict (string → string) instead of
+ * a strict Record<enum, ...>. The 15 entries below are the "core" pool
+ * always available; the Strategy-Brief expander appends sub-personas at
+ * runtime into the same shape via `persona-pool.ts` / `usePersonaPool`.
+ *
+ * Use `getPersonaLabel(id)` / `getPersonaDescription(id)` below for safe
+ * lookups that fall back to the raw ID instead of returning undefined.
+ */
+export const PERSONA_LABELS: Record<string, string> = {
   family_man: 'พ่อบ้านลพบุรี',
   housewife: 'แม่บ้านชานเมือง',
   businessman: 'เจ้าของธุรกิจขนาดเล็ก',
   genz: 'นักศึกษา/GenZ หอ',
-  // Refined splits.
   family_man_commuter: 'พ่อบ้าน กทม.-ปริมณฑล',
   housewife_urban: 'แม่บ้านคอนโดเมือง',
   businessman_hotelier: 'เจ้าของโรงแรมบูทีค',
   genz_first_condo: 'GenZ คอนโดใหม่',
-  // New segments.
   contractor: 'รับเหมา/ตกแต่งภายใน',
   interior_designer: 'นักออกแบบ interior',
   millennial_remote_worker: 'มิลเลนเนียล WFH',
@@ -269,20 +328,14 @@ export const PERSONA_LABELS: Record<PersonaId, string> = {
   price_hunter: 'นักล่าราคาถูก',
 };
 
-/**
- * Persona pool metadata — used by the Judge prompt to know which personas
- * to consider, and by future UI selectors. Keep descriptions short (under
- * 120 chars) so the prompt stays compact.
- */
-export const PERSONA_DESCRIPTIONS: Record<PersonaId, string> = {
+export const PERSONA_DESCRIPTIONS: Record<string, string> = {
   family_man:
     'พ่อบ้าน 35-55 ตจว. มีลูก-มีบ้านเดี่ยว ใส่ใจค่าไฟ/warranty มากกว่า aesthetic',
   housewife:
     'แม่บ้าน 35-55 ชานเมือง ตกแต่งบ้านเอง ใส่ใจ "ดูแล้วน่าอยู่ ลูกแพ้ฝุ่นน้อย"',
   businessman:
     'เจ้าของธุรกิจเล็ก (ร้าน/คาเฟ่/สปา) ต้องการ vibe + ออกใบกำกับภาษี + งานเสร็จก่อนเปิดร้าน',
-  genz:
-    'นักศึกษาหอ/คอนโด 19-23 งบ ฿2-5k เน้น aesthetic + share IG/TikTok',
+  genz: 'นักศึกษาหอ/คอนโด 19-23 งบ ฿2-5k เน้น aesthetic + share IG/TikTok',
   family_man_commuter:
     'พ่อบ้าน กทม.-ปริมณฑล 30-45 ผ่อนบ้าน ทำงาน 9-5 ตัดสินใจเรื่องบ้านร่วมกับภรรยา',
   housewife_urban:
@@ -305,4 +358,36 @@ export const PERSONA_DESCRIPTIONS: Record<PersonaId, string> = {
     'คู่แต่งงานใหม่ ตกแต่งบ้านครั้งแรก งบใหญ่ ตัดสินใจร่วม ใส่ใจ "สวย-ทน-คุ้ม"',
   price_hunter:
     'ลูกค้าที่หาราคาถูกที่สุด — รับ promo, ต่อรอง, เปรียบ 3 ร้าน, deal-driven',
+};
+
+/**
+ * Safe label lookup — checks (in order):
+ *   1. caller-supplied `customLabels` (highest priority — explicit override)
+ *   2. module-level runtime registry (set by App.tsx from usePersonaPool)
+ *   3. core PERSONA_LABELS (the 15 baked-in archetypes)
+ *   4. the raw id (fallback so UI never renders "undefined")
+ *
+ * Runtime registry is read via dynamic import to avoid a cycle —
+ * schemas.ts is the leaf module that persona-pool.ts depends on.
+ */
+export const getPersonaLabel = (
+  id: string,
+  customLabels?: Readonly<Record<string, string>>,
+): string => {
+  if (customLabels?.[id]) return customLabels[id];
+  // Dynamic registry check — avoids importing persona-pool.ts here (would cycle).
+  const fromRegistry = (globalThis as { __mtrPersonaLabels?: Readonly<Record<string, string>> }).__mtrPersonaLabels?.[id];
+  if (fromRegistry) return fromRegistry;
+  return PERSONA_LABELS[id] ?? id;
+};
+
+/** Safe description lookup — empty string for unknown IDs. */
+export const getPersonaDescription = (
+  id: string,
+  customDescriptions?: Readonly<Record<string, string>>,
+): string => {
+  if (customDescriptions?.[id]) return customDescriptions[id];
+  const fromRegistry = (globalThis as { __mtrPersonaDescriptions?: Readonly<Record<string, string>> }).__mtrPersonaDescriptions?.[id];
+  if (fromRegistry) return fromRegistry;
+  return PERSONA_DESCRIPTIONS[id] ?? '';
 };

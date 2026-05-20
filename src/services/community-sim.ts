@@ -193,30 +193,46 @@ ${ad.visual_idea}
 // ════════════════════════════════════════════════════════════════════
 
 const buildInterviewPrompt = (ad: AdIdea): string => `\
-คุณคือสมาชิกชุมชนในลพบุรีที่ได้เห็น ad ชิ้นนี้บน Facebook/TikTok:
+คุณคือคน **จริง ๆ** คนหนึ่งในลพบุรี ไม่ใช่ผู้บริโภคทั่วไปที่ตอบให้ "ดูดี" — คุณมีอาชีพ มีเงินจำกัด มีปัญหาเฉพาะตัว
+ที่ได้เห็น ad ชิ้นนี้บน Facebook/TikTok:
 
 Style: ${ad.style}
 Copy:
 ${ad.copy}
 Visual idea: ${ad.visual_idea}
 
-ตอบตามบุคลิกและชีวิตจริงของตัวละครที่คุณเล่น ตอบเป็น JSON object เดียวเท่านั้น ไม่มี text อื่นนอก JSON:
+═══════════════════════════════════════════════════════════════
+กฎสำคัญที่สุด — กันการตอบแบบ "pleaser":
+1. **Ad ส่วนใหญ่ไม่ตรงกับทุกคน** — ถ้า ad นี้ไม่ตรงกลุ่มคุณ ให้ stance="negative" หรือ "neutral" ตรง ๆ
+   ห้ามตอบ "positive" เพราะรู้สึกเกรงใจ
+2. **มี objection = ไม่บอกว่า positive** — ถ้าคุณกังวลเรื่องราคา/คุณภาพ/ติดตั้ง/อื่น ๆ stance ต้อง
+   "neutral" หรือ "negative" (positive แปลว่า "ไม่มีอะไรค้างคา พร้อมตัดสินใจเลย" เท่านั้น)
+3. **Click = ตัดสินใจจริง** — would_click="yes" แปลว่า "จะหยิบมือถือทักไลน์ตอนนี้ภายในวันนี้"
+   ไม่ใช่ "อาจจะ" หรือ "น่าสนใจดี" — ถ้าลังเลใช้ "maybe", ถ้าไม่ใช่กลุ่ม ใช้ "no"
+4. **Trust < 4 = ยังไม่เชื่อพอจะคลิก** — ถ้า trust 1-3 แล้ว would_click="yes" คือขัดแย้ง
+5. **Share = action ของจริง** — would_share="yes" แปลว่า "จะแชร์ใน LINE กลุ่ม/แท็กเพื่อน ตอนนี้"
+   ไม่ใช่ "save เก็บไว้" — ของจริงคนแชร์ ad น้อยกว่าที่คิด < 30%
+
+═══════════════════════════════════════════════════════════════
+ตอบตามบุคลิกและชีวิตจริงของตัวละครที่คุณเล่น — ห้ามรวมเสียงเป็นความเห็นกลาง ๆ ที่ใครก็เซย์ได้
+ตอบเป็น JSON object เดียวเท่านั้น ไม่มี text อื่นนอก JSON:
 {
   "would_click": "yes" | "no" | "maybe",
-  "reason": "เหตุผล 1-2 ประโยค — ทำไมถึงคลิก/ไม่คลิก (ภาษาไทย)",
-  "objection": "ข้อกังวล/สิ่งที่รั้งไว้ 1 ประโยค (ภาษาไทย) หรือ 'none'",
+  "reason": "เหตุผล 1-2 ประโยค — ทำไมถึงคลิก/ไม่คลิก (ภาษาไทย ใช้สำเนียงและคำที่คนกลุ่มคุณใช้)",
+  "objection": "ข้อกังวล/สิ่งที่รั้งไว้ 1 ประโยค (ภาษาไทย) หรือ 'none' ถ้าไม่มีจริง ๆ",
   "trust": 1 | 2 | 3 | 4 | 5,
   "would_share": "yes" | "no",
   "stance": "positive" | "neutral" | "negative",
-  "quote": "ประโยคที่คุณจะพูดถึง ad นี้ต่อหน้าเพื่อน/ครอบครัว 1 ประโยค (ภาษาไทย)",
+  "quote": "ประโยคที่คุณจะพูดถึง ad นี้ต่อหน้าเพื่อน/ครอบครัว 1 ประโยค (ภาษาไทย ใช้สำเนียงเฉพาะตัว)",
   "purchase_timeline": "now" | "this_month" | "this_year" | "no",
   "wom_channel": "line_group" | "facebook" | "tell_friend" | "none"
 }
 
 คำอธิบายฟิลด์:
-- trust: 1=ไม่เชื่อเลย, 3=กลางๆ, 5=เชื่อมากและไว้ใจ
-- purchase_timeline: now=ติดต่อเลย, this_month=ภายในเดือนนี้, this_year=ปีนี้, no=ไม่ซื้อ
-- wom_channel: จะแชร์/บอกต่อผ่านช่องทางไหน (none=ไม่บอกต่อ)
+- trust: 1=ไม่เชื่อเลย, 3=กลางๆ ต้องเช็คเพิ่ม, 5=เชื่อมากและไว้ใจ (เก็บ 5 ไว้สำหรับร้านที่คุณรู้จักจริง ๆ)
+- purchase_timeline: now=ติดต่อเลยวันนี้, this_month=ภายในเดือน, this_year=ปีนี้, no=ไม่ซื้อ
+- wom_channel: ของจริงต้องเลือก "none" ถ้าไม่แน่ใจว่าจะแชร์
+- objection: ใช้คำของคุณเอง ไม่ใช่ template — ของจริงคนคิด objection เฉพาะตัว ไม่ใช่ "ราคาแพงเกินไป" ทุกคน
 `.trim();
 
 // ════════════════════════════════════════════════════════════════════
@@ -278,18 +294,61 @@ const safeJson = (s: string): unknown => {
 const TIMELINE_VALUES = new Set(['now', 'this_month', 'this_year', 'no'] as const);
 const WOM_VALUES = new Set(['line_group', 'facebook', 'tell_friend', 'none'] as const);
 
+/**
+ * Classify the objection text into "real concern" vs "no-op". Anything
+ * beyond the no-op tokens counts as a real reservation that should
+ * down-weight an otherwise-positive stance (LLM pleaser-bias correction).
+ *
+ * Thai variants like "ไม่มีนะ", "ไม่มีเลยจ้า", "ไม่มีอะไรค้างคา" all need to
+ * match — exact tokens missed them. The regex matches:
+ *   1. ASCII no-ops: empty, "none", "-", "—", "n/a", "null"
+ *   2. Thai negation stem "ไม่มี" + optional trailing words (เลย, ค่ะ,
+ *      ครับ, จ้า, นะ, อะไร, ปัญหา, ข้อกังวล, ค้างคา…) up to ~20 chars
+ *
+ * Length-based fallback is intentionally NOT used — Thai single-word
+ * objections like "ราคา" / "แพง" must still count as real concerns.
+ */
+const NO_OP_OBJECTION_REGEX =
+  /^(?:|none|-+|—|n\/?a|null|nil|ไม่มี(?:เลย|ค่ะ|ครับ|จ้า|นะ|อะไร|ปัญหา|ข้อกังวล|ค้างคา|\s)*)$/i;
+
+const isRealObjection = (objection: string): boolean => {
+  const trimmed = objection.trim().toLowerCase();
+  return !NO_OP_OBJECTION_REGEX.test(trimmed);
+};
+
 const coerceResponse = (obj: unknown): ParsedResponse | null => {
   if (!obj || typeof obj !== 'object') return null;
   const r = obj as Record<string, unknown>;
   const click = String(r.would_click ?? '').toLowerCase();
   if (click !== 'yes' && click !== 'no' && click !== 'maybe') return null;
   const stanceRaw = String(r.stance ?? '').toLowerCase();
-  const stance: ParsedResponse['stance'] =
+  let stance: ParsedResponse['stance'] =
     stanceRaw === 'positive' || stanceRaw === 'negative' ? stanceRaw : 'neutral';
   const shareRaw = String(r.would_share ?? '').toLowerCase();
-  const share: ParsedResponse['would_share'] = shareRaw === 'yes' ? 'yes' : 'no';
+  let share: ParsedResponse['would_share'] = shareRaw === 'yes' ? 'yes' : 'no';
   const trustNum = Number(r.trust);
   const trust = Number.isFinite(trustNum) ? Math.min(5, Math.max(1, Math.round(trustNum))) : 3;
+  const objection = typeof r.objection === 'string' ? r.objection : '';
+  let normalizedClick: ParsedResponse['would_click'] = click;
+
+  // ───── Cross-check: demote contradictory combinations ─────
+  // LLMs default to "positive + I'd click + 5/5 trust" even when they
+  // simultaneously emit a real objection. Real consumer psychology says:
+  // "I have a concern" → at most neutral. The corrections below give the
+  // aggregator output that actually matches the agent's own words.
+  const hasRealObjection = isRealObjection(objection);
+  if (hasRealObjection && stance === 'positive') {
+    stance = 'neutral'; // objection contradicts positive stance
+  }
+  if (trust < 4 && normalizedClick === 'yes') {
+    normalizedClick = 'maybe'; // can't be "yes" if trust is low
+  }
+  if (trust <= 2 && stance === 'positive') {
+    stance = 'neutral'; // very low trust contradicts positive stance
+  }
+  if (normalizedClick === 'no' && share === 'yes') {
+    share = 'no'; // wouldn't click but would share? nope, downgrade.
+  }
 
   // Optional enrichment — gracefully absent in legacy/short runs.
   const timelineRaw = String(r.purchase_timeline ?? '').toLowerCase() as ParsedResponse['purchase_timeline'];
@@ -298,9 +357,9 @@ const coerceResponse = (obj: unknown): ParsedResponse | null => {
   const wom_channel = WOM_VALUES.has(womRaw as never) ? womRaw : undefined;
 
   return {
-    would_click: click,
+    would_click: normalizedClick,
     reason: typeof r.reason === 'string' ? r.reason : '',
-    objection: typeof r.objection === 'string' ? r.objection : '',
+    objection,
     trust,
     would_share: share,
     stance,
@@ -318,7 +377,7 @@ const aggregateObjections = (responses: readonly ParsedResponse[]): ObjectionIte
   const counts = new Map<string, { text: string; count: number }>();
   for (const r of responses) {
     const o = r.objection.trim();
-    if (!o || o.toLowerCase() === 'none' || o.toLowerCase() === '-') continue;
+    if (!isRealObjection(o)) continue;
     const key = o.toLowerCase().slice(0, 40);
     const existing = counts.get(key);
     if (existing) {

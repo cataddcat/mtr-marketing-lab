@@ -20,6 +20,7 @@ import {
 import {
   CHANNEL_LABELS,
   PERSONA_LABELS,
+  getPersonaLabel,
   type ChannelId,
   type PersonaId,
 } from '../lib/schemas';
@@ -71,18 +72,18 @@ const personaAvg = (p: {
 }): number => (p.scroll_stop_score + p.focused_score + p.memory_score) / 3;
 
 const renderPersonaIndex = (registry: WikilinkRegistry): string => {
-  const persona = (id: PersonaId): string => {
-    const label = PERSONA_LABELS[id];
-    return registry.wikilink(`persona:${id}`, label);
-  };
+  const persona = (id: PersonaId): string =>
+    registry.wikilink(`persona:${id}`, getPersonaLabel(id));
+  const links = (Object.keys(PERSONA_LABELS) as PersonaId[])
+    .map(id => `- ${persona(id)}`)
+    .join('\n');
   return `# 👥 Personas (Map of Content)
 
-The four hardcoded consumer personas the Judge simulates.
+15 core consumer archetypes the Judge can simulate. The app additionally
+generates sub-personas at runtime from Strategy-Brief expansion — those
+stay in localStorage and aren't exported here (transient by design).
 
-- ${persona('family_man')}
-- ${persona('housewife')}
-- ${persona('businessman')}
-- ${persona('genz')}
+${links}
 
 Each persona note links to every ad the Judge thought it would respond well to (avg ≥ 7).
 `;
@@ -96,13 +97,13 @@ const renderPersonaNote = (
   const fm = renderFrontmatter({
     type: 'persona',
     persona_id: id,
-    label: PERSONA_LABELS[id],
+    label: getPersonaLabel(id),
     ad_count: adsForPersona.length,
   });
   const links = adsForPersona.length
     ? adsForPersona.map(r => `- ${registry.wikilink(`ad:${r.id}`, r.ad.style)}`).join('\n')
     : '- (ยังไม่มี ad ที่ตรงกับ persona นี้)';
-  return `${fm}# 👤 ${PERSONA_LABELS[id]}
+  return `${fm}# 👤 ${getPersonaLabel(id)}
 
 > Persona ที่ Judge ใช้สมมุติบทบาทผู้บริโภคในการประเมิน ad
 
@@ -152,7 +153,7 @@ const renderBriefNote = (
 - **Top objection:** ${s.top_objection}
 - **Winning angle:** ${s.winning_angle}
 - **Funnel:** ${FUNNEL_LABELS[s.funnel_stage]}
-${s.linked_persona ? `- **Linked persona:** ${registry.wikilink(`persona:${s.linked_persona}`, PERSONA_LABELS[s.linked_persona])}` : ''}`,
+${s.linked_persona ? `- **Linked persona:** ${registry.wikilink(`persona:${s.linked_persona}`, getPersonaLabel(s.linked_persona))}` : ''}`,
     )
     .join('\n\n');
 
@@ -247,7 +248,7 @@ const renderAdNote = (
   const personaLines = evalData
     ? evalData.personas
         .map(p => {
-          const linked = registry.wikilink(`persona:${p.id}`, PERSONA_LABELS[p.id]);
+          const linked = registry.wikilink(`persona:${p.id}`, getPersonaLabel(p.id));
           return `- ${linked} (${personaAvg(p).toFixed(1)}/10) — ${p.verdict}\n  - 💡 ${p.suggestion}`;
         })
         .join('\n')
@@ -274,14 +275,12 @@ const renderAdNote = (
   const strategyFitLines = evalData?.strategy_fit
     ? (() => {
         const sf = evalData.strategy_fit;
-        const ba = sf.benchmark_alignment;
         const jtbd = sf.jtbd_coverage
           .map(c => `  - **${c.segment_name}** (${c.score}/10) — gap: ${c.gap || '—'}`)
           .join('\n');
         return `\n### 🧭 Strategy fit (per Brief)
 - **Positioning:** ${sf.positioning_score}/10 — ${sf.positioning_critique}
 - **Whitespace:** ${sf.whitespace_capture}/10 — ${sf.whitespace_critique}
-- **Benchmark:** ${ba.estimated_ctr_pct.toFixed(2)}% CTR · ${CHANNEL_LABELS[ba.channel]} · ${ba.vs_benchmark} — ${ba.note}
 - **JTBD coverage:**
 ${jtbd}
 `;

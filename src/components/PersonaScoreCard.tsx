@@ -1,7 +1,7 @@
 import { useId } from 'react';
 import { ChevronDown, ChevronUp, Loader2, Sparkles, Copy as CopyIcon } from 'lucide-react';
 import {
-  PERSONA_LABELS,
+  getPersonaLabel,
   personaAverage,
   type Confidence,
   type PersonaEval,
@@ -61,7 +61,7 @@ export function PersonaScoreCard({
       >
         <div className="flex-1 min-w-0">
           <div className="font-mono text-[10.5px] tracking-[0.12em] uppercase text-fg-3 mb-1 truncate" lang="th">
-            {PERSONA_LABELS[persona.id]}
+            {getPersonaLabel(persona.id)}
           </div>
           <div
             className="font-mono text-lg font-medium tabular-nums"

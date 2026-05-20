@@ -4,10 +4,9 @@ import type { AdIdea, AdEvaluation, VisualPrompt } from './services/marketing-ag
 import type { RewriteState } from './components/PersonaScoreCard';
 import type { PersonaId, ParsedAdIdea } from './lib/schemas';
 import { fetchTrends, type TrendsSnapshot } from './services/trends';
-import { Loader2, Target, Bookmark, Settings, Sparkles, LogOut, FolderTree, Fish } from 'lucide-react';
+import { Loader2, Target, Bookmark, Settings, Sparkles, LogOut, FolderTree, Fish, Users } from 'lucide-react';
 import { InlineError } from './components/InlineError';
 import { useToast } from './components/toast-context';
-import { CompetitorInput } from './components/CompetitorInput';
 import { PerformancePanel } from './components/PerformancePanel';
 import { TranslatePanel } from './components/TranslatePanel';
 import { isPerformanceEmpty, type PerformanceMetrics } from './lib/performance';
@@ -24,6 +23,10 @@ import { SummaryStrip } from './components/SummaryStrip';
 import { SavedLibrary } from './components/SavedLibrary';
 import { useBrandFacts } from './hooks/useBrandFacts';
 import { useStrategyBrief } from './hooks/useStrategyBrief';
+import { usePersonaPool } from './hooks/usePersonaPool';
+import { PersonaPoolView } from './components/PersonaPoolView';
+import { expandPersonasFromBrief } from './services/persona-expander';
+import { setRuntimeLabels, setRuntimeDescriptions } from './lib/persona-pool';
 import { useAuth } from './hooks/useAuth';
 import { SignInScreen } from './components/SignInScreen';
 import { useAllFeedback } from './hooks/useFeedback';
@@ -32,7 +35,7 @@ import { applyDemoBundle, clearDemoBundle, isDemoLoaded } from './lib/demo-data'
 import { CommunitySimulationPanel } from './components/CommunitySimulationPanel';
 import { CommunitySimConfigForm } from './components/CommunitySimConfigForm';
 import { isMiroFishConfigured } from './lib/mirofish-client';
-import { PERSONA_LABELS } from './lib/schemas';
+import { getPersonaLabel } from './lib/schemas';
 import type { CommunitySim, CommunitySimConfig } from './lib/schemas';
 import { runCommunitySim, type CommunitySimProgress } from './services/community-sim';
 import { PRODUCT_EXAMPLES, PROMO_EXAMPLES } from './lib/example-prompts';
@@ -58,10 +61,14 @@ export default function App() {
   const auth = useAuth();
   const toast = useToast();
   const brandFactsApi = useBrandFacts();
+  const personaPoolApi = usePersonaPool();
   const [activeTab, setActiveTab] = useState<'generator' | 'library'>('generator');
   const [factsPanelOpen, setFactsPanelOpen] = useState(false);
   const [briefPanelOpen, setBriefPanelOpen] = useState(false);
   const [exportPanelOpen, setExportPanelOpen] = useState(false);
+  const [personaPoolPanelOpen, setPersonaPoolPanelOpen] = useState(false);
+  const [personaExpanding, setPersonaExpanding] = useState(false);
+  const [personaExpandError, setPersonaExpandError] = useState<string | null>(null);
   const [communityPanelOpen, setCommunityPanelOpen] = useState(false);
   const [communityTargetAdIndex, setCommunityTargetAdIndex] = useState<number | null>(null);
   const [performanceTarget, setPerformanceTarget] = useState<string | null>(null);
@@ -75,17 +82,16 @@ export default function App() {
   const [product, setProduct] = useState(() => loadInputDraft().product);
   const [promo, setPromo] = useState(() => loadInputDraft().promo);
   const strategyBriefApi = useStrategyBrief({ product, promo, brandFacts: brandFactsApi.facts });
-  const [competitorAd, setCompetitorAd] = useState(() => loadInputDraft().competitorAd);
 
   // Debounced auto-save: persist 500ms after typing pauses so we don't
   // thrash localStorage on every keystroke. The cleanup cancels in-flight
   // timers when state changes again, giving us trailing-edge debounce.
   useEffect(() => {
     const timer = setTimeout(() => {
-      persistInputDraft({ product, promo, competitorAd });
+      persistInputDraft({ product, promo });
     }, 500);
     return () => clearTimeout(timer);
-  }, [product, promo, competitorAd]);
+  }, [product, promo]);
   const [ads, setAds] = useState<AdIdea[]>([]);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -127,6 +133,14 @@ export default function App() {
   // while community sim is mid-flight (the boolean above only covers "is running").
   const [communityProgress, setCommunityProgress] = useState<Record<number, CommunitySimProgress>>({});
   const communityAbortsRef = useRef<Map<number, AbortController>>(new Map());
+
+  // Push persona pool lookups into the runtime registry so schemas.ts
+  // getPersonaLabel/Description can resolve generated persona IDs
+  // (seg-xxx-vN) without prop-drilling through every component.
+  useEffect(() => {
+    setRuntimeLabels(personaPoolApi.labels);
+    setRuntimeDescriptions(personaPoolApi.descriptions);
+  }, [personaPoolApi.labels, personaPoolApi.descriptions]);
 
   useEffect(() => {
     const localData = localStorage.getItem('mtr_saved_ads');
@@ -256,10 +270,10 @@ export default function App() {
       const result = await evaluateAd(ad, controller.signal, {
         trends: trendsRef.current,
         brandFacts: brandFactsApi.facts,
-        competitorAd,
         calibration: calibrationExamples,
         strategyBrief: strategyBriefApi.current,
         communitySim: priorCommunitySim,
+        personaPool: personaPoolApi.active,
       });
       if (controller.signal.aborted) return;
       if (result) {
@@ -352,9 +366,9 @@ export default function App() {
       const result = await runEnsembleEval(ad, baseline, controller.signal, {
         trends: trendsRef.current,
         brandFacts: brandFactsApi.facts,
-        competitorAd,
         calibration: calibrationExamples,
         strategyBrief: strategyBriefApi.current,
+        personaPool: personaPoolApi.active,
       });
       if (controller.signal.aborted) return;
       if (result) {
@@ -576,7 +590,7 @@ export default function App() {
       ? evalData.personas
           .map(p => {
             const personaAvg = ((p.scroll_stop_score + p.focused_score + p.memory_score) / 3).toFixed(1);
-            return `- **${PERSONA_LABELS[p.id]}** (${personaAvg}/10) — ${p.verdict}\n  - 💡 ${p.suggestion}`;
+            return `- **${getPersonaLabel(p.id, personaPoolApi.labels)}** (${personaAvg}/10) — ${p.verdict}\n  - 💡 ${p.suggestion}`;
           })
           .join('\n')
       : '- N/A';
@@ -647,14 +661,12 @@ ${evalData.competitor.theirs_strengths.map(s => `  - ${s}`).join('\n')}
     const strategyFitLines = evalData?.strategy_fit
       ? (() => {
           const sf = evalData.strategy_fit;
-          const ba = sf.benchmark_alignment;
           const jtbdLines = sf.jtbd_coverage
             .map(c => `  - **${c.segment_name}** (${c.score}/10) — gap: ${c.gap || '—'}`)
             .join('\n');
           return `\n### 🧭 Strategy fit (per Brief)
 - **Positioning fit:** ${sf.positioning_score}/10 — ${sf.positioning_critique}
 - **Whitespace capture:** ${sf.whitespace_capture}/10 — ${sf.whitespace_critique}
-- **Benchmark alignment:** ${ba.estimated_ctr_pct.toFixed(2)}% CTR on ${ba.channel.replace('_', ' ')} (${ba.vs_benchmark}) — ${ba.note}
 - **JTBD coverage:**
 ${jtbdLines || '  - (no segments)'}
 `;
@@ -695,7 +707,34 @@ ${personaLines}
     toast.success('Export เรียบร้อย');
   };
 
+  const handleExpandPersonaPool = async (variantsPerSegment: number) => {
+    const brief = strategyBriefApi.current;
+    if (!brief) {
+      setPersonaExpandError('ต้องมี Strategy Brief ก่อน — สร้าง brief แล้วลองอีกครั้ง');
+      return;
+    }
+    setPersonaExpanding(true);
+    setPersonaExpandError(null);
+    try {
+      const personas = await expandPersonasFromBrief({ brief, variantsPerSegment });
+      if (personas.length === 0) {
+        setPersonaExpandError('Expander คืน 0 personas — ตรวจ LLM logs หรือลองอีกครั้ง');
+        return;
+      }
+      personaPoolApi.append(personas);
+      toast.success(`เพิ่ม ${personas.length} sub-personas เข้า pool · รวม ${personaPoolApi.all.length + personas.length}`);
+    } catch (err) {
+      if (isAbortError(err)) return;
+      console.error('[expandPersonas]', err);
+      setPersonaExpandError(errorMessage(err));
+      toast.error(`Expand ล้มเหลว: ${errorMessage(err)}`);
+    } finally {
+      setPersonaExpanding(false);
+    }
+  };
+
   const activeBrandFacts = brandFactsApi.facts.filter(f => f.enabled).length;
+  const activePersonaCount = personaPoolApi.active.length;
   // Memoize: selectCalibrationExamples sorts + filters savedAds; avoid the
   // recompute on every keystroke in unrelated fields.
   const calibrationExamples = useMemo(
@@ -904,10 +943,6 @@ ${personaLines}
                 className="w-full min-h-[140px] resize-none rounded-md border border-border bg-bg px-3 py-2 text-sm leading-relaxed text-fg-1 placeholder:text-fg-4 transition-colors hover:border-border-strong focus:border-accent"
               />
             </div>
-            <div className="relative" data-dev-code="GEN.ADV">
-              <SectionTag code="GEN.ADV" floating />
-              <CompetitorInput value={competitorAd} onChange={setCompetitorAd} />
-            </div>
             <div className="flex flex-col relative" data-dev-code="GEN.RUN">
               <SectionTag code="GEN.RUN" floating />
               <span className="block mb-2 h-[15px]" aria-hidden="true">&nbsp;</span>
@@ -982,6 +1017,25 @@ ${personaLines}
             >
               <Settings className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
               Brand facts · <b className="text-fg-1 font-medium">{activeBrandFacts}</b>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPersonaPoolPanelOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-pill border transition-colors"
+              style={personaPoolApi.generated.length > 0
+                ? {
+                    color: 'var(--color-accent)',
+                    borderColor: 'color-mix(in oklch, var(--color-accent) 35%, transparent)',
+                    background: 'color-mix(in oklch, var(--color-accent) 8%, transparent)',
+                  }
+                : { color: 'var(--color-fg-2)', borderColor: 'var(--color-border-faint)' }}
+              title="Persona Pool — 15 core + sub-personas ที่ expand จาก Strategy Brief"
+            >
+              <Users className="w-3 h-3" strokeWidth={1.5} aria-hidden="true" />
+              Personas · <b className="font-medium">{activePersonaCount}</b>
+              {personaPoolApi.generated.length > 0 && (
+                <span className="font-mono text-[10px] opacity-70">+{personaPoolApi.generated.length}</span>
+              )}
             </button>
             <button
               type="button"
@@ -1251,6 +1305,24 @@ ${personaLines}
         <CommunitySimulationPanel
           ad={communityTargetAdIndex !== null ? ads[communityTargetAdIndex] ?? null : null}
           brandFacts={brandFactsApi.facts}
+        />
+      </Sheet>
+
+      <Sheet
+        open={personaPoolPanelOpen}
+        onClose={() => setPersonaPoolPanelOpen(false)}
+        title="Persona Pool"
+      >
+        <PersonaPoolView
+          personas={personaPoolApi.all}
+          brief={strategyBriefApi.current}
+          briefIsStale={strategyBriefApi.isStale}
+          expanding={personaExpanding}
+          expandError={personaExpandError}
+          onExpand={handleExpandPersonaPool}
+          onToggle={personaPoolApi.toggleEnabled}
+          onRemove={personaPoolApi.remove}
+          onClearGenerated={personaPoolApi.clearGenerated}
         />
       </Sheet>
 

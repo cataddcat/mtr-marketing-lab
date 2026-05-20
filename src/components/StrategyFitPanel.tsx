@@ -1,5 +1,5 @@
-import { Sparkles, Target, Compass, Gauge as GaugeIcon } from 'lucide-react';
-import { CHANNEL_LABELS, type StrategyFit } from '../lib/schemas';
+import { Sparkles, Target, Compass } from 'lucide-react';
+import type { StrategyFit } from '../lib/schemas';
 import { ScoreBar } from './ScoreBar';
 import { scoreClass, scoreColorVar } from '../lib/score';
 
@@ -7,23 +7,9 @@ interface Props {
   readonly strategyFit: StrategyFit;
 }
 
-const BUCKET_LABEL = {
-  above: 'เหนือ benchmark',
-  on: 'เท่า benchmark',
-  below: 'ต่ำกว่า benchmark',
-} as const;
-
-const BUCKET_COLOR_VAR = {
-  above: 'var(--color-success)',
-  on: 'var(--color-info)',
-  below: 'var(--color-warning)',
-} as const;
-
 export function StrategyFitPanel({ strategyFit }: Props) {
   const positioningCls = scoreClass(strategyFit.positioning_score);
   const whitespaceCls = scoreClass(strategyFit.whitespace_capture);
-  const ba = strategyFit.benchmark_alignment;
-  const bucketColor = BUCKET_COLOR_VAR[ba.vs_benchmark];
 
   return (
     <section
@@ -115,29 +101,6 @@ export function StrategyFitPanel({ strategyFit }: Props) {
         </div>
       )}
 
-      <div
-        className="mt-3 pt-3 border-t flex items-start gap-2"
-        style={{ borderColor: 'var(--color-border-faint)' }}
-      >
-        <GaugeIcon
-          className="w-3.5 h-3.5 mt-0.5 shrink-0"
-          strokeWidth={1.5}
-          style={{ color: bucketColor }}
-          aria-hidden="true"
-        />
-        <div className="flex-1 min-w-0">
-          <p className="text-[12px] text-fg-1 leading-snug">
-            <span className="font-mono tabular-nums" style={{ color: bucketColor }}>
-              {ba.estimated_ctr_pct.toFixed(2)}% CTR
-            </span>
-            <span className="text-fg-3"> · {CHANNEL_LABELS[ba.channel]} · </span>
-            <span style={{ color: bucketColor }}>{BUCKET_LABEL[ba.vs_benchmark]}</span>
-          </p>
-          <p className="text-[11px] text-fg-3 mt-0.5 leading-relaxed" lang="th">
-            {ba.note}
-          </p>
-        </div>
-      </div>
     </section>
   );
 }

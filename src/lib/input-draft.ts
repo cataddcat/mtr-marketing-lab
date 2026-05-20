@@ -1,9 +1,9 @@
 /**
  * Generator-panel input draft persistence.
  *
- * Auto-saves the three textareas (product / promo / competitor ad) to
- * localStorage so a hard refresh, accidental tab close, or browser crash
- * doesn't wipe the user's in-progress brief. Restored on next mount.
+ * Auto-saves the two textareas (product / promo) to localStorage so a hard
+ * refresh, accidental tab close, or browser crash doesn't wipe the user's
+ * in-progress brief. Restored on next mount.
  *
  * Storage is intentionally NOT shared with `mtr_saved_ads` etc. — those
  * survive demo bundle ops; the draft is a transient scratchpad.
@@ -14,10 +14,9 @@ const STORAGE_KEY = 'mtr_input_draft';
 export interface InputDraft {
   product: string;
   promo: string;
-  competitorAd: string;
 }
 
-const EMPTY: InputDraft = { product: '', promo: '', competitorAd: '' };
+const EMPTY: InputDraft = { product: '', promo: '' };
 
 export const loadInputDraft = (): InputDraft => {
   try {
@@ -29,7 +28,6 @@ export const loadInputDraft = (): InputDraft => {
     return {
       product: typeof p.product === 'string' ? p.product : '',
       promo: typeof p.promo === 'string' ? p.promo : '',
-      competitorAd: typeof p.competitorAd === 'string' ? p.competitorAd : '',
     };
   } catch {
     return EMPTY;
@@ -39,7 +37,7 @@ export const loadInputDraft = (): InputDraft => {
 export const persistInputDraft = (draft: InputDraft): void => {
   try {
     // Empty draft → wipe the key so localStorage stays clean.
-    if (!draft.product && !draft.promo && !draft.competitorAd) {
+    if (!draft.product && !draft.promo) {
       localStorage.removeItem(STORAGE_KEY);
       return;
     }

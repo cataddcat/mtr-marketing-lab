@@ -7,14 +7,17 @@ import {
   AdEvaluationSchema,
   VisualPromptSchema,
   PERSONA_LABELS,
-  PERSONA_DESCRIPTIONS,
-  PersonaIdSchema,
+  panelAverage,
   type AdEvaluation,
   type ParsedAdIdea,
   type PersonaEval,
-  type PersonaId,
   type VisualPrompt,
 } from '../lib/schemas';
+import {
+  CORE_PERSONA_POOL,
+  hashPersonaPool,
+  type Persona,
+} from '../lib/persona-pool';
 import type { TrendsSnapshot } from './trends';
 import {
   formatBrandFactsForPrompt,
@@ -39,11 +42,21 @@ import {
 import type { CommunitySim } from '../lib/schemas';
 
 export type { AdEvaluation, VisualPrompt, PersonaEval, PersonaId } from '../lib/schemas';
-export { personaAverage, PERSONA_LABELS } from '../lib/schemas';
+export { personaAverage, panelAverage, PERSONA_LABELS } from '../lib/schemas';
 
 export interface AdIdea extends ParsedAdIdea {
   clientId: string;
 }
+
+/**
+ * Bump whenever the Judge system prompt changes meaningfully (rubric,
+ * scoring instructions, anti-template rules, persona-pool instructions).
+ * Calibration filters out saved ads whose prompt_version differs so old
+ * scores don't drag the new prompt's calibration.
+ *
+ * Format: YYYY-MM-DD of the change.
+ */
+export const JUDGE_PROMPT_VERSION = '2026-05-21';
 
 const logExtractionFailure = (label: string, err: unknown): void => {
   if (err instanceof JsonExtractionError) {
@@ -148,8 +161,8 @@ export const generateAds = async (
 • ภาษาแชท: ใช้ "อ่ะ", "งี้", "เลย", "ไหม", "นะ" — ห้ามใช้ "ค่ะ/ครับ", "ท่าน", "พบกับ", "เรียนเชิญ", "พิเศษเฉพาะคุณ"
 • เปิดด้วย hook 1 บรรทัด (เช่น "POV:", "เรื่องที่ไม่มีใครบอก:", "วันนี้มาเล่าให้ฟัง...")
 • Aesthetic > Feature: พูดเรื่อง vibe, แสง, มุดดี้, golden hour, soft light, สีในห้อง — ก่อนคุณสมบัติสินค้า
-• อนุญาตสแลง 2026: ปังมาก, ฉ่ำ, ลั่น, ตัวแม่, อยู่หมัด, จี๊ดด, ฟิน — แต่ไม่ยัด ไม่เกิน 2 คำต่อโฆษณา
-• Emoji ใช้เป็นเครื่องหมายวรรคตอน 1-2 ตัวเท่านั้น (preferred: 🪟 🕯️ 🌙 ☁️ 🤎) ห้ามสแปม
+• สแลง: ใช้ได้ไม่เกิน 2 คำต่อโฆษณา และ "ใช้เฉพาะคำที่คุณมั่นใจ ≥90% ว่าใช้กันอยู่จริงในเดือนนี้" — ถ้าไม่แน่ใจให้ตัดทิ้ง (สแลงที่ตกยุคทำให้ ad ดูแก่กว่าไม่ใส่)
+• Emoji ใช้เป็นเครื่องหมายวรรคตอน 1-2 ตัวเท่านั้น (เลือกให้เข้ากับ mood ของ ad) ห้ามสแปม
 • ห้าม corporate-speak: "นวัตกรรม", "ครบครัน", "ตอบโจทย์ทุกไลฟ์สไตล์", "!!!"
 • visual_idea ต้องระบุ: aspect ratio (9:16 หรือ 4:5), shot type (close-up/POV/over-shoulder), mood (golden hour / blue hour / overcast)
 
@@ -242,26 +255,6 @@ ${current}${previousBlock}${newBlock}${nicheBlock}${related}
 `;
 };
 
-const buildCompetitorBlock = (competitor: string | null): string => {
-  if (!competitor || competitor.trim().length === 0) return '';
-  return `
-═══════════════════════════════════════════════════════════════
-COMPETITOR REFERENCE — โฆษณาของคู่แข่งในตลาดเดียวกัน:
-
-"""
-${competitor.trim()}
-"""
-
-เปรียบเทียบ ad ของเรากับคู่แข่งนี้แบบ panel-level (ไม่ใช่ per-persona):
-  winner          : 'ours' / 'theirs' / 'tie' (ฝ่ายที่ panel ส่วนใหญ่จะ engage มากกว่า)
-  margin          : 0-10 (ห่างกันแค่ไหน — 0 = เกือบเสมอ, 10 = ขาดลอย)
-  ours_strengths  : 2-3 ข้อสั้นๆ ที่ ad เราเหนือกว่าคู่แข่ง
-  theirs_strengths: 2-3 ข้อสั้นๆ ที่ ad คู่แข่งเหนือกว่าเรา
-  recommendation  : 1 ประโยคที่ควรปรับ ad ของเราเพื่อปิดช่องว่าง (ไม่เกิน 200 ตัวอักษร)
-
-ใส่เพิ่มใน field "competitor" ของ JSON output.`;
-};
-
 const formatCommunitySimForPrompt = (sim: CommunitySim | null): string => {
   if (!sim) return '';
   const obj = sim.top_objections
@@ -303,35 +296,42 @@ const hashCommunitySim = (sim: CommunitySim | null): string => {
 };
 
 /**
- * Render the 15-persona pool as a compact reference block for the Judge.
- * The Judge picks 3-6 most relevant from this list per ad — not all 15.
+ * Render the persona pool as a compact reference block for the Judge.
+ * The pool now grows dynamically from Strategy Brief expansion (Track
+ * F-option-A) — Judge picks 4-12 most-relevant per ad instead of being
+ * locked to a fixed 15-persona enum.
+ *
+ * Each line: `id (label) — description [· segment context if present]`
+ * Compact enough to keep prompt size reasonable even at 50 personas.
  */
-const PERSONA_POOL_BLOCK: string = (() => {
-  const ids = PersonaIdSchema.options as readonly PersonaId[];
-  const lines = ids.map(id => `  ${id} (${PERSONA_LABELS[id]}) — ${PERSONA_DESCRIPTIONS[id]}`);
-  return `PERSONA POOL — 15 archetypes (เลือก 3-6 ตัวที่เกี่ยวข้องมากที่สุดกับ ad นี้)
+const buildPersonaPoolBlock = (pool: readonly Persona[]): string => {
+  const active = pool.filter(p => p.enabled);
+  if (active.length === 0) return '';
+  const lines = active.map(p => {
+    const tag = p.source_segment_name ? ` [segment: ${p.source_segment_name}]` : '';
+    return `  ${p.id} (${p.label}) — ${p.description}${tag}`;
+  });
+  return `PERSONA POOL — ${active.length} archetypes (เลือก 4-12 ตัวที่เกี่ยวข้องมากที่สุดกับ ad นี้)
 ${lines.join('\n')}`;
-})();
+};
 
 const buildJudgePrompt = (
   trends: TrendsSnapshot | null,
   brandFacts: readonly BrandFact[],
-  competitor: string | null = null,
+  personaPool: readonly Persona[],
   calibration: readonly CalibrationExample[] = [],
   strategyBrief: StrategyBrief | null = null,
   communitySim: CommunitySim | null = null,
+  cacheSalt: string = '',
 ): string => {
+  const personaPoolBlock = buildPersonaPoolBlock(personaPool);
   const trendsBlock = buildTrendsBlock(trends);
   const factsBlock = formatBrandFactsForPrompt(brandFacts);
   const calibrationBlock = formatCalibrationForPrompt(calibration);
   const timeBlock = buildTimeContextBlock();
   const nicheBlock = buildNicheContextBlock();
-  const competitorBlock = buildCompetitorBlock(competitor);
   const briefBlock = isBriefUsable(strategyBrief)
     ? formatStrategyForEvaluation(strategyBrief)
-    : '';
-  const competitorJsonField = competitor
-    ? `,\n  "competitor": {"winner": "ours|theirs|tie", "margin": 0, "ours_strengths": ["..."], "theirs_strengths": ["..."], "recommendation": "..."}`
     : '';
   const strategyFitJsonField = briefBlock
     ? `,\n  "strategy_fit": {
@@ -341,13 +341,7 @@ const buildJudgePrompt = (
       {"segment_name": "...", "score": 0, "gap": "..."}
     ],
     "whitespace_capture": 0,
-    "whitespace_critique": "...",
-    "benchmark_alignment": {
-      "channel": "facebook_feed",
-      "estimated_ctr_pct": 0.0,
-      "vs_benchmark": "above|on|below",
-      "note": "..."
-    }
+    "whitespace_critique": "..."
   }`
     : '';
   const strategyFitInstructions = briefBlock
@@ -364,34 +358,45 @@ STRATEGY FIT — เนื่องจากมี <STRATEGY_BRIEF> ติดม
   whitespace_capture (0-10): ad เล่นมุม whitespace_opportunity ที่ brief เสนอหรือไม่
                               0 = ซ้ำ positioning คู่แข่ง, 10 = ครอบมุมใหม่ตามคำแนะนำเป๊ะ
   whitespace_critique      : 1 ประโยค
-  benchmark_alignment      : ดู channel_fit.best แล้วเทียบ CTR ที่คาดกับ benchmark ของ channel นั้นใน brief
-                              channel        = id ของช่อง best
-                              estimated_ctr_pct = ตัวเลข % ที่คาดว่า ad นี้จะทำได้ (ใช้ scroll_stop + hook quality เป็น signal)
-                              vs_benchmark   = 'above' / 'on' / 'below' เทียบกับ p50 ของ benchmark channel นั้น
-                              note           = 1 ประโยคบอกเหตุผล
 ใส่ field "strategy_fit" ใน JSON output ตามรูปแบบด้านล่าง`
     : '';
   return `คุณคือ Consumer Panel Simulator สำหรับ "ม่านธารา" (ท่าศาลา, ลพบุรี)
-จงเลือกผู้บริโภค 3-6 archetype จาก persona pool ด้านล่าง ที่ "เกี่ยวข้องมากที่สุดกับ ad นี้"
-ห้ามให้คะแนน "เฉลี่ยๆ" — ถ้าโฆษณาไม่ตรงกลุ่ม ให้คะแนนต่ำตรงไปตรงมา
+จงเลือกผู้บริโภค "อย่างน้อย 6 ตัว ไม่เกิน 10 ตัว" (sweet spot สำหรับ B2C) จาก persona pool ด้านล่าง
+ที่ "เกี่ยวข้องมากที่สุดกับ ad นี้"  ห้ามให้คะแนน "เฉลี่ยๆ" — ถ้าโฆษณาไม่ตรงกลุ่ม ให้คะแนนต่ำตรงไปตรงมา
 
 ═══════════════════════════════════════════════════════════════
-${PERSONA_POOL_BLOCK}
+${personaPoolBlock}
 
-กฎการเลือก:
-• เลือก 3-6 personas (ไม่ใช่ทั้ง 15) — เฉพาะที่ "น่าจะเป็นลูกค้าจริง" ของ ad นี้
-• ถ้า ad เน้น aesthetic/visual → จะมี GenZ/มิลเลนเนียลโผล่
-• ถ้า ad เน้นตัวเลข/warranty/ROI → จะมี family_man, businessman, contractor
-• ถ้า ad เน้นราคาถูก → ต้องมี price_hunter
-• ถ้ามี Strategy Brief ติดมา (ด้านล่าง) → priority คือ linked_persona ของ segments ใน brief
-• ถ้า ad เป็น B2B → ต้องมี businessman / businessman_hotelier / contractor / interior_designer
-• ห้ามเลือก "พรรค pleaser" ที่ชอบทุกอย่าง — ต้องมีอย่างน้อย 1 คนที่ "เฉยๆ หรือไม่ชอบ" ถ้า ad มีจุดอ่อนจริง
+กฎการเลือกจำนวน:
+🎯 **ขั้นต่ำ 6 personas · เป้าหมาย 8 · เพดาน 10** (schema ยอมรับ 3-12 แต่ "6-10" คือ sweet spot จริง)
+   - ทำไม 6+ — ad B2C เกือบทุกตัวมี audience overlap 3-5 archetypes หลัก × 2-3 sub variants
+   - ถ้าให้ < 6 = blind spot สูง · ถ้าให้ > 10 = noise ครอบงำ signal
+   - แม้คิดว่า ad ตรงกลุ่มแคบ ก็ยังต้อง stress-test กับ persona "นอกกลุ่ม" 1-2 ตัว
+     เพื่อยืนยันว่ามัน "ไม่หลุด" ในจริง ๆ
+
+กฎการเลือกตัว:
+• ถ้า ad เน้น aesthetic/visual → ต้องมี GenZ + มิลเลนเนียล + housewife-urban
+• ถ้า ad เน้นตัวเลข/warranty/ROI → ต้องมี family_man + businessman + contractor
+• ถ้า ad เน้นราคาถูก → ต้องมี price_hunter + family_man
+• ถ้ามี Strategy Brief ติดมา (ด้านล่าง) → priority คือ linked_persona ของ segments ใน brief +
+  sub-personas ที่ generate มาจาก segments เหล่านั้น (id ขึ้นต้นด้วย "seg-")
+• ถ้า ad เป็น B2B → ต้องมี businessman + businessman_hotelier + contractor + interior_designer
+• ห้ามเลือก "พรรค pleaser" ที่ชอบทุกอย่าง — ต้องมีอย่างน้อย 1-2 คนที่ "เฉยๆ หรือไม่ชอบ" ถ้า ad มีจุดอ่อน
+• Pool มี sub-personas ที่ขยายจาก segments เดียวกัน — เลือกข้าม segments เพื่อ stress-test ครอบคลุม
 ${trendsBlock}
 ═══════════════════════════════════════════════════════════════
 สำหรับแต่ละ persona ที่คุณเลือก ให้คะแนน 3 มิติ (สำคัญที่สุด — ห้ามใส่คะแนนเดียวรวม):
   scroll_stop_score (0-10) : 0.5 วินาทีแรก หยุดเลื่อนได้ไหม (gut reaction)
   focused_score    (0-10)  : หลังจ้อง 5 วินาที ตัดสินใจได้ไหม (rational)
   memory_score     (0-10)  : ผ่านไป 1 ชั่วโมง ยังจำได้ไหม (retention)
+
+🎯 ANTI-TEMPLATE rules (สำคัญที่สุด — กันการให้คะแนนแบบ lazy template):
+  1. **ห้าม pattern [N, N-1, N-1]** กับทุก persona เช่น [9,8,8]→[8,7,7]→[7,6,6] เป็น template
+     LLM ส่วนใหญ่ default แบบนี้ → ห้ามทำ · ทุก persona ต้องคิดแต่ละมิติแยก
+  2. **ภายใน 1 persona — 3 มิติต้องกระจายจริง** ไม่ใช่เรียงลำดับ
+     ตัวอย่าง: ad 'hook ปังแต่ลืมง่าย' → scroll_stop=9, focused=6, memory=3 (spread 6)
+     ตัวอย่าง: ad 'ไม่สะดุดตาแต่อ่านเข้าใจ' → scroll_stop=4, focused=8, memory=7
+     ถ้า scroll/focused/memory ใกล้กัน ±1 ตลอดทุก persona = template lazy
 
 แต่ละ persona ต้องตอบ:
   id            : ใช้ id ตรงตามรายการใน pool ด้านบน (เช่น "family_man", "businessman_hotelier", "price_hunter")
@@ -415,7 +420,7 @@ STRUCTURAL ANALYSIS — แยกประเมิน ad copy เป็น 3 �
   hook_critique / body_critique / cta_critique : วิจารณ์ส่วนนั้น 1 ประโยคสั้น
 
 ═══════════════════════════════════════════════════════════════
-CHANNEL FIT — ประเมินว่า ad นี้เหมาะกับ channel ไหน (0-10 แต่ละช่อง):
+CHANNEL FIT — ประเมินว่า ad นี้เหมาะกับ channel ไหน (เลือก 2-3 ช่องที่เกี่ยวข้องที่สุด · 0-10):
   facebook_feed    : คอนเทนต์ผสมรูป+ข้อความยาว เห็นเต็ม mobile/desktop ลูกค้าโต-วัยทำงาน
   facebook_reels   : vertical video 9:16 สั้น เน้น hook 0.5s, voice-on
   instagram_feed   : aesthetic-first, square/portrait, ลูกค้า aspirational
@@ -425,13 +430,16 @@ CHANNEL FIT — ประเมินว่า ad นี้เหมาะกั
 ถ้า ad เน้นข้อความ + รูป → facebook_feed/instagram_feed score สูง
 ถ้า ad เป็น POV/BTS/sound-driven → tiktok/reels score สูง
 ถ้า ad ยาว 4-5 บรรทัด → facebook_feed > reels (เพราะ reels ไม่อ่านข้อความ)
-ranked = list เรียงจากคะแนนสูงสุดลงต่ำ (ใส่ทั้ง 5 ช่อง)
-best = id ของช่อง top 1
-reasoning = สั้น ๆ ว่าทำไมเลือก best (~80 ตัวอักษร)
+ranked = top 2-3 ช่องที่ดีที่สุด เรียงจากสูงสุดลงต่ำ · **ห้ามใส่ทั้ง 5** เพราะหลายช่องไม่ได้เกี่ยวข้องจริง
+best = id ของช่อง top 1 (ต้องอยู่ใน ranked)
+reasoning = สั้น ๆ ว่าทำไมเลือก best เหนือกว่า alternatives (~80 ตัวอักษร)
 ${strategyFitInstructions}
 
 ═══════════════════════════════════════════════════════════════
-บังคับตอบเป็น JSON object รูปแบบนี้เท่านั้น ห้ามมีข้อความอื่นผสม:
+บังคับตอบเป็น JSON object รูปแบบนี้เท่านั้น ห้ามมีข้อความอื่นผสม
+**สำคัญเรื่อง quotes:** ใช้ ASCII straight " (U+0022) เท่านั้น ห้ามใช้ smart/curly quotes (‘ ’ “ ”) เด็ดขาด
+ตัวอย่างผิด: {"channel": "facebook_feed’, ‘score": 8}  ← curly singles ปะปน
+ตัวอย่างถูก: {"channel": "facebook_feed", "score": 8}:
 {
   "panel_verdict": "...",
   "trends_used": ["..."],
@@ -444,23 +452,23 @@ ${strategyFitInstructions}
     "ranked": [
       {"channel": "tiktok",          "score": 0},
       {"channel": "instagram_reels", "score": 0},
-      {"channel": "facebook_reels",  "score": 0},
-      {"channel": "instagram_feed",  "score": 0},
       {"channel": "facebook_feed",   "score": 0}
     ],
     "best": "tiktok",
     "reasoning": "..."
   },
   "personas": [
-    /* ใส่ 3-6 entries — เฉพาะ persona ที่คุณ "เลือก" จาก pool ด้านบน
-       (ห้ามใส่ทั้ง 15 — เลือกที่เกี่ยวข้องจริงเท่านั้น)
+    /* ใส่ 6-10 entries (ขั้นต่ำ 3 เพื่อให้ schema ผ่าน · เป้าหมาย 8)
+       เลือกเฉพาะ persona ที่ "เกี่ยวข้องจริง" จาก pool ด้านบน
        id ต้องตรงเป๊ะกับ id ใน pool */
     {"id": "family_man",  "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "high", "verdict": "...", "suggestion": "..."},
     {"id": "housewife",   "scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "med",  "verdict": "...", "suggestion": "..."},
     {"id": "price_hunter","scroll_stop_score": 0, "focused_score": 0, "memory_score": 0, "confidence": "low",  "verdict": "...", "suggestion": "..."}
   ],
-  "average_score": 0.0${competitorJsonField}${strategyFitJsonField}
-}${timeBlock}${nicheBlock}${factsBlock}${calibrationBlock}${competitorBlock}${briefBlock}${formatCommunitySimForPrompt(communitySim)}`;
+  "average_score": 0.0${strategyFitJsonField}
+}${timeBlock}${nicheBlock}${factsBlock}${calibrationBlock}${briefBlock}${formatCommunitySimForPrompt(communitySim)}${
+    cacheSalt ? `\n\n<!-- ensemble run: ${cacheSalt} — independent panel, different perspective -->` : ''
+  }`;
 };
 
 export interface EvaluateAdOptions {
@@ -471,8 +479,6 @@ export interface EvaluateAdOptions {
    * Use 'r2', 'r3' etc. for repeated evaluations; omit for the baseline.
    */
   readonly cacheSalt?: string;
-  /** Optional competitor ad text — adds comparison block to the output. */
-  readonly competitorAd?: string;
   /**
    * Past saved ads + their real outcomes — Judge sees these as few-shot
    * priors so it can adjust scoring toward what actually works in the shop.
@@ -487,12 +493,72 @@ export interface EvaluateAdOptions {
    * community_sim block; it just consumes it.
    */
   readonly communitySim?: CommunitySim | null;
+  /**
+   * Persona pool fed into the Judge prompt. Defaults to the 15 core
+   * personas if omitted, but callers typically pass `usePersonaPool().active`
+   * which adds Strategy-Brief-expanded sub-personas (Track F-option-A).
+   */
+  readonly personaPool?: readonly Persona[];
 }
 
-const hashString = (s: string): string => {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return h.toString(36);
+const round1 = (v: number): number => Math.round(v * 10) / 10;
+
+const computePanelAverage = (evaluation: AdEvaluation): number => {
+  // Confidence + channel weighted — see panelAverage() in schemas.ts.
+  // Falls back to plain mean inside panelAverage if no channel is set.
+  return round1(panelAverage(evaluation.personas, evaluation.channel_fit.best));
+};
+
+const stdOf = (xs: readonly number[]): number => {
+  if (xs.length === 0) return 0;
+  const m = xs.reduce((a, b) => a + b, 0) / xs.length;
+  return Math.sqrt(xs.reduce((s, v) => s + (v - m) ** 2, 0) / xs.length);
+};
+
+/**
+ * Detect LLM lazy-scoring patterns the prompt warns against but can't
+ * enforce. Surfaces flags into evaluation.quality_flags so the UI can
+ * show a "panel may be templating" hint instead of treating the score
+ * as trusted data.
+ *
+ * Flags:
+ *   template-pattern     — within every persona, the 3 dimensions are nearly
+ *                          identical (std < 0.7) AND there's a clear monotone
+ *                          ordering (scroll >= focused >= memory or reverse)
+ *                          across ≥80% of personas — the [N, N-1, N-1] tell.
+ *   pleaser-bias         — every persona scored ≥5 on every dimension. Real
+ *                          ads have ≥1 weak score somewhere; this flag means
+ *                          the Judge avoided saying anything is bad.
+ *   low-confidence-panel — majority confidence=low; treat scores as noise.
+ */
+const detectQualityFlags = (evaluation: AdEvaluation): string[] => {
+  const flags: string[] = [];
+  const personas = evaluation.personas;
+  if (personas.length === 0) return flags;
+
+  let lowSpreadCount = 0;
+  let monotonicCount = 0;
+  let allAboveFive = true;
+  let lowConf = 0;
+  for (const p of personas) {
+    const dims = [p.scroll_stop_score, p.focused_score, p.memory_score];
+    if (stdOf(dims) < 0.7) lowSpreadCount += 1;
+    // monotonic descending (scroll >= focused >= memory) is the most common
+    // template; also count ascending for completeness.
+    const desc = dims[0] >= dims[1] && dims[1] >= dims[2];
+    const asc = dims[0] <= dims[1] && dims[1] <= dims[2];
+    if (desc || asc) monotonicCount += 1;
+    if (dims.some(d => d < 5)) allAboveFive = false;
+    if (p.confidence === 'low') lowConf += 1;
+  }
+
+  const n = personas.length;
+  if (lowSpreadCount / n >= 0.8 && monotonicCount / n >= 0.8) {
+    flags.push('template-pattern');
+  }
+  if (allAboveFive) flags.push('pleaser-bias');
+  if (lowConf / n > 0.5) flags.push('low-confidence-panel');
+  return flags;
 };
 
 export const evaluateAd = async (
@@ -505,14 +571,16 @@ export const evaluateAd = async (
   const calibration = options.calibration ?? [];
   const strategyBrief = options.strategyBrief ?? null;
   const communitySim = options.communitySim ?? null;
-  const competitor = options.competitorAd?.trim() ? options.competitorAd.trim() : null;
+  const personaPool = options.personaPool ?? CORE_PERSONA_POOL;
+  const salt = options.cacheSalt ?? '';
   const systemPrompt = buildJudgePrompt(
     trends,
     brandFacts,
-    competitor,
+    personaPool,
     calibration,
     strategyBrief,
     communitySim,
+    salt,
   );
 
   const userPrompt = `ประเมินโฆษณาต่อไปนี้:
@@ -524,12 +592,11 @@ export const evaluateAd = async (
   const calibHash = hashCalibrationExamples(calibration);
   const briefHash = hashStrategyBrief(strategyBrief);
   const simHash = hashCommunitySim(communitySim);
-  const salt = options.cacheSalt ?? '';
-  const compHash = competitor ? hashString(competitor) : '';
-  const cacheKeyData = `${ad.copy}\n${ad.visual_idea}\n${trendsDate}\n${factsHash}\n${calibHash}\n${briefHash}\n${simHash}\n${salt}\n${compHash}`;
+  const poolHash = hashPersonaPool(personaPool);
+  const cacheKeyData = `${ad.copy}\n${ad.visual_idea}\n${trendsDate}\n${factsHash}\n${calibHash}\n${briefHash}\n${simHash}\n${poolHash}\n${salt}`;
 
   try {
-    return await generateAndExtract({
+    const parsed = await generateAndExtract({
       label: 'evaluateAd',
       systemPrompt,
       userPrompt,
@@ -538,6 +605,16 @@ export const evaluateAd = async (
       caller: callerFor('judge', cacheKeyData),
       signal,
     });
+    // Override LLM-emitted average_score with deterministic client-side
+    // computation. LLM math on 18-30 numeric fields is not reliable; the
+    // headline number must come from the same scores the UI renders.
+    const withClientAvg: AdEvaluation = {
+      ...parsed,
+      average_score: computePanelAverage(parsed),
+      prompt_version: JUDGE_PROMPT_VERSION,
+    };
+    const flags = detectQualityFlags(withClientAvg);
+    return flags.length > 0 ? { ...withClientAvg, quality_flags: flags } : withClientAvg;
   } catch (e) {
     logExtractionFailure('evaluateAd', e);
     return null;
@@ -564,8 +641,6 @@ const mean = (values: readonly number[]): number => {
   if (values.length === 0) return 0;
   return values.reduce((a, b) => a + b, 0) / values.length;
 };
-
-const round1 = (v: number): number => Math.round(v * 10) / 10;
 
 const mode = <T extends string>(values: readonly T[]): T => {
   const counts = new Map<T, number>();
@@ -648,31 +723,20 @@ function aggregateEvaluations(runs: readonly AdEvaluation[]): AdEvaluation {
     };
   });
 
-  const average_score = round1(mean(runs.map(r => r.average_score)));
+  // Derive panel average from the aggregated personas the UI will render,
+  // weighted by confidence + channel-fit best. Keeps the headline number
+  // consistent with the score bars below it.
+  const average_score = round1(panelAverage(personas, channel_fit.best));
   const max_std = stds.length === 0 ? 0 : Math.max(...stds);
 
-  // competitor — only present if all runs supplied one (defensive)
-  let competitor: AdEvaluation['competitor'] = undefined;
-  const compRuns = runs
-    .map(r => r.competitor)
-    .filter((c): c is NonNullable<typeof c> => Boolean(c));
-  if (compRuns.length > 0) {
-    competitor = {
-      winner: mode(compRuns.map(c => c.winner)),
-      margin: trackField('competitor.margin', compRuns.map(c => c.margin)),
-      ours_strengths: compRuns[0].ours_strengths,
-      theirs_strengths: compRuns[0].theirs_strengths,
-      recommendation: compRuns[0].recommendation,
-    };
-  }
-
-  return {
+  const aggregated: AdEvaluation = {
     panel_verdict: baseline.panel_verdict,
     trends_used: baseline.trends_used,
     structure,
     channel_fit,
     personas,
     average_score,
+    prompt_version: baseline.prompt_version ?? JUDGE_PROMPT_VERSION,
     ensemble: {
       runs: runs.length,
       variance: {
@@ -680,16 +744,17 @@ function aggregateEvaluations(runs: readonly AdEvaluation[]): AdEvaluation {
         unstable_fields: unstable,
       },
     },
-    ...(competitor ? { competitor } : {}),
   };
+  const flags = detectQualityFlags(aggregated);
+  return flags.length > 0 ? { ...aggregated, quality_flags: flags } : aggregated;
 }
 
 export interface EnsembleOptions {
   readonly trends?: TrendsSnapshot | null;
   readonly brandFacts?: readonly BrandFact[];
-  readonly competitorAd?: string;
   readonly calibration?: readonly CalibrationExample[];
   readonly strategyBrief?: StrategyBrief | null;
+  readonly personaPool?: readonly Persona[];
   /** Extra runs to perform on top of the baseline (default 2 → 3 total). */
   readonly additionalRuns?: number;
 }
@@ -708,9 +773,9 @@ export const runEnsembleEval = async (
       evaluateAd(ad, signal, {
         trends: options.trends,
         brandFacts: options.brandFacts,
-        competitorAd: options.competitorAd,
         calibration: options.calibration,
         strategyBrief: options.strategyBrief,
+        personaPool: options.personaPool,
         cacheSalt: salt,
       }),
     ),
@@ -745,7 +810,10 @@ export const rewriteAd = async (
     ? formatStrategyForRewrite(options.strategyBrief ?? null, persona.id)
     : '';
   const timeBlock = buildTimeContextBlock();
-  const personaLabel = PERSONA_LABELS[persona.id];
+  // Persona may be a generated sub-persona (seg-xxx-vN) not in the core
+  // PERSONA_LABELS dict. Fall back to the raw id so the rewrite prompt
+  // still has *something* readable to address.
+  const personaLabel = PERSONA_LABELS[persona.id] ?? persona.id;
 
   const systemPrompt = `คุณคือ Senior copywriter ของม่านธารา
 จง rewrite โฆษณาตาม feedback ที่ได้จาก consumer persona "${personaLabel}"
@@ -754,7 +822,10 @@ export const rewriteAd = async (
 - ห้ามเพิ่มข้อมูลที่ไม่มีใน BRAND_FACTS / context
 - ความยาวใกล้เคียง ad เดิม
 ${timeBlock}${factsBlock}${briefBlock}
-บังคับตอบเป็น JSON object รูปแบบนี้เท่านั้น ห้ามมีข้อความอื่นผสม:
+บังคับตอบเป็น JSON object รูปแบบนี้เท่านั้น ห้ามมีข้อความอื่นผสม
+**สำคัญเรื่อง quotes:** ใช้ ASCII straight " (U+0022) เท่านั้น ห้ามใช้ smart/curly quotes (‘ ’ “ ”) เด็ดขาด
+ตัวอย่างผิด: {"channel": "facebook_feed’, ‘score": 8}  ← curly singles ปะปน
+ตัวอย่างถูก: {"channel": "facebook_feed", "score": 8}:
 {"style": "${ad.style}", "copy": "...", "visual_idea": "..."}`;
 
   const userPrompt = `ad เดิม:

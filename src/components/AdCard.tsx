@@ -14,15 +14,15 @@ import {
 import type { AdIdea, VisualPrompt } from '../services/marketing-agent';
 import type { AdEvaluation, PersonaId } from '../lib/schemas';
 import type { CommunitySimProgress } from '../services/community-sim';
-import { PERSONA_LABELS, personaAverage } from '../lib/schemas';
+import { getPersonaLabel, personaAverage } from '../lib/schemas';
 import { isMiroFishConfigured } from '../lib/mirofish-client';
 import type { RewriteState } from './PersonaScoreCard';
 import { InlineError } from './InlineError';
 import { EnsembleBadge } from './EnsembleBadge';
+import { QualityFlagsBadge } from './QualityFlagsBadge';
 import { PersonaPanelGroup } from './PersonaPanelGroup';
 import { StructureBreakdown } from './StructureBreakdown';
 import { ChannelFitPanel } from './ChannelFitPanel';
-import { CompetitorPanel } from './CompetitorPanel';
 import { StrategyFitPanel } from './StrategyFitPanel';
 import { CommunityInsightCard } from './CommunityInsightCard';
 import { FeedbackThumbs } from './FeedbackThumbs';
@@ -440,6 +440,11 @@ export function AdCard({
                       <EnsembleBadge meta={evaluation.ensemble} />
                     </div>
                   )}
+                  {evaluation.quality_flags && evaluation.quality_flags.length > 0 && (
+                    <div className="mt-2">
+                      <QualityFlagsBadge flags={evaluation.quality_flags} />
+                    </div>
+                  )}
                   {evaluation.trends_used.length > 0 && (
                     <p className="text-[11px] text-fg-3 mt-3 inline-flex items-start gap-1.5" lang="th">
                       <TrendingUp className="w-3 h-3 mt-0.5 shrink-0" strokeWidth={1.5} style={{ color: 'var(--color-info)' }} aria-hidden="true" />
@@ -471,6 +476,7 @@ export function AdCard({
                         onClick={onRunEnsemble}
                         disabled={ensembleLoading}
                         aria-busy={ensembleLoading}
+                        title="Deep eval ใช้ LLM 2x เพิ่มจากรอบแรก (รวม 3 รัน) — ได้ variance signal + ลด lazy template"
                         className="text-[11px] text-fg-3 hover:text-accent inline-flex items-center gap-1.5 min-h-[28px] disabled:opacity-50 transition-colors"
                       >
                         {ensembleLoading ? (
@@ -480,7 +486,7 @@ export function AdCard({
                         )}
                         {ensembleLoading
                           ? 'กำลังประเมินเพิ่ม 2 รอบ...'
-                          : 'วิเคราะห์ลึก (3-run ensemble)'}
+                          : 'Deep eval · 3 รัน (×3 cost)'}
                       </button>
                     </div>
                   )}
@@ -493,7 +499,7 @@ export function AdCard({
                     </p>
                     <Radar
                       values={evaluation.personas.map(personaAverage)}
-                      labels={evaluation.personas.map(p => ({ name: PERSONA_LABELS[p.id] }))}
+                      labels={evaluation.personas.map(p => ({ name: getPersonaLabel(p.id) }))}
                       size={220}
                     />
                   </div>
@@ -505,9 +511,6 @@ export function AdCard({
                     <StructureBreakdown structure={evaluation.structure} />
                     <ChannelFitPanel channelFit={evaluation.channel_fit} />
                   </div>
-                  {evaluation.competitor && (
-                    <CompetitorPanel comparison={evaluation.competitor} />
-                  )}
                   {evaluation.strategy_fit && (
                     <StrategyFitPanel strategyFit={evaluation.strategy_fit} />
                   )}

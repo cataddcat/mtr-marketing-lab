@@ -49,9 +49,21 @@ const excerpt = (copy: string): string => {
   return first.length > 140 ? `${first.slice(0, 137).trim()}…` : first;
 };
 
+/**
+ * The current Judge prompt version. Calibration only uses examples scored
+ * by THIS version — older scores would drag the new prompt's calibration
+ * across prompt-rubric changes. Re-exported here to avoid a marketing-agent
+ * import cycle from this leaf module.
+ */
+const CURRENT_PROMPT_VERSION = '2026-05-21';
+
 const hasUsableSignal = (s: CalibrationSource): boolean => {
   if (!s.evaluation) return false;
   if (typeof s.evaluation.average_score !== 'number') return false;
+  // Skip examples scored by an older prompt — rubric drift makes them
+  // misleading priors. Legacy ads (no prompt_version) are also skipped
+  // since their scores predate this signal entirely.
+  if (s.evaluation.prompt_version !== CURRENT_PROMPT_VERSION) return false;
   // Need at least an outcome tag or one performance number we can express.
   if (s.outcome) return true;
   if (s.performance) {
@@ -149,7 +161,10 @@ export function formatCalibrationForPrompt(
         parts.push(`       · CTR: ${e.realCtrPct.toFixed(2)}%`);
       }
       if (typeof e.realCostPerClick === 'number') {
-        parts.push(`       · ต้นทุนต่อคลิก: ฿${e.realCostPerClick.toFixed(2)}`);
+        // CPC is a strong signal alongside CTR: high CTR + high CPC may mean
+        // wrong audience targeting; low CTR + low CPC may mean cheap reach.
+        // Judge should factor it into the calibration prior, not just CTR alone.
+        parts.push(`       · ต้นทุนต่อคลิก: ฿${e.realCostPerClick.toFixed(2)} (CPC สูง = audience ตรงน้อย / ต่ำ = ตรงกลุ่ม)`);
       }
       if (e.notes) parts.push(`       · บันทึก: ${e.notes}`);
       return parts.join('\n');
@@ -177,6 +192,10 @@ export function hashCalibrationExamples(
 ): string {
   if (examples.length === 0) return '';
   return examples
-    .map(e => `${e.id}:${e.judgeScore.toFixed(1)}:${e.outcome ?? '-'}:${e.realCtrPct?.toFixed(2) ?? '-'}`)
+    .map(e =>
+      `${e.id}:${e.judgeScore.toFixed(1)}:${e.outcome ?? '-'}`
+      + `:${e.realCtrPct?.toFixed(2) ?? '-'}`
+      + `:${e.realCostPerClick?.toFixed(2) ?? '-'}`,
+    )
     .join('|');
 }

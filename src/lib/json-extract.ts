@@ -34,8 +34,22 @@ const stripFences = (s: string): string => {
   return s.replace(/```(?:json|JSON|json5|JSON5)?/g, '').replace(/```/g, '').trim();
 };
 
+/**
+ * Conservative: curly DOUBLE → straight double, curly SINGLE → straight single.
+ * Preserves the distinction so genuine apostrophes inside strings survive.
+ */
 const normalizeQuotes = (s: string): string =>
   s.replace(/[“”„‟]/g, '"').replace(/[‘’‚‛]/g, "'");
+
+/**
+ * Aggressive: ALL curly quotes (single + double) → straight DOUBLE quote.
+ * Used as a fallback variant when the LLM mistakes curly singles for JSON
+ * string delimiters — seen with Gemini/some Thai-tuned models emitting
+ * `"key": "value’, ‘key2": "value2"` instead of all-straight `"`.
+ * Trade-off: breaks if a curly single is genuinely inside a string value.
+ */
+const normalizeQuotesAggressive = (s: string): string =>
+  s.replace(/[“”„‟‘’‚‛]/g, '"');
 
 const stripTrailingCommas = (s: string): string => s.replace(/,(\s*[}\]])/g, '$1');
 
@@ -168,12 +182,18 @@ export function extractJson<TSchema extends v.GenericSchema>(
 
   for (const span of balancedSpans(cleaned, open)) {
     const quoteFixed = normalizeQuotes(span);
+    const quoteFixedAggressive = normalizeQuotesAggressive(span);
     const commentStripped = stripComments(quoteFixed);
     const variants: readonly string[] = [
       span,
       stripTrailingCommas(span),
       quoteFixed,
       stripTrailingCommas(quoteFixed),
+      // Aggressive fallback: covers LLM that emits "key": "val’, ‘key2":
+      // (curly singles used as JSON delimiters). Tried late so we don't
+      // clobber genuine apostrophes-inside-strings when conservative works.
+      quoteFixedAggressive,
+      stripTrailingCommas(quoteFixedAggressive),
       commentStripped,
       stripTrailingCommas(commentStripped),
     ];
