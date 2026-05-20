@@ -40,23 +40,15 @@ import {
   type StrategyBrief,
 } from '../lib/strategy-brief';
 import type { CommunitySim } from '../lib/schemas';
+import { JUDGE_PROMPT_VERSION } from '../lib/prompt-version';
 
 export type { AdEvaluation, VisualPrompt, PersonaEval, PersonaId } from '../lib/schemas';
 export { personaAverage, panelAverage, PERSONA_LABELS } from '../lib/schemas';
+export { JUDGE_PROMPT_VERSION } from '../lib/prompt-version';
 
 export interface AdIdea extends ParsedAdIdea {
   clientId: string;
 }
-
-/**
- * Bump whenever the Judge system prompt changes meaningfully (rubric,
- * scoring instructions, anti-template rules, persona-pool instructions).
- * Calibration filters out saved ads whose prompt_version differs so old
- * scores don't drag the new prompt's calibration.
- *
- * Format: YYYY-MM-DD of the change.
- */
-export const JUDGE_PROMPT_VERSION = '2026-05-21';
 
 const logExtractionFailure = (label: string, err: unknown): void => {
   if (err instanceof JsonExtractionError) {

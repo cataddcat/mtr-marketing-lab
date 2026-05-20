@@ -16,6 +16,7 @@ import {
   costPerClick,
   type PerformanceMetrics,
 } from './performance';
+import { JUDGE_PROMPT_VERSION } from './prompt-version';
 
 export type Outcome = 'used-good' | 'used-bad';
 
@@ -49,21 +50,13 @@ const excerpt = (copy: string): string => {
   return first.length > 140 ? `${first.slice(0, 137).trim()}…` : first;
 };
 
-/**
- * The current Judge prompt version. Calibration only uses examples scored
- * by THIS version — older scores would drag the new prompt's calibration
- * across prompt-rubric changes. Re-exported here to avoid a marketing-agent
- * import cycle from this leaf module.
- */
-const CURRENT_PROMPT_VERSION = '2026-05-21';
-
 const hasUsableSignal = (s: CalibrationSource): boolean => {
   if (!s.evaluation) return false;
   if (typeof s.evaluation.average_score !== 'number') return false;
   // Skip examples scored by an older prompt — rubric drift makes them
   // misleading priors. Legacy ads (no prompt_version) are also skipped
   // since their scores predate this signal entirely.
-  if (s.evaluation.prompt_version !== CURRENT_PROMPT_VERSION) return false;
+  if (s.evaluation.prompt_version !== JUDGE_PROMPT_VERSION) return false;
   // Need at least an outcome tag or one performance number we can express.
   if (s.outcome) return true;
   if (s.performance) {

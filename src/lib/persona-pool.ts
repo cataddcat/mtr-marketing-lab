@@ -268,7 +268,7 @@ export const segmentVariantId = (segmentName: string, variantIndex: number): str
   const base = segmentName
     .toLowerCase()
     .replace(/[\s/()]+/g, '-')
-    .replace(/[^a-z0-9ก-๙\-]/gi, '')
+    .replace(/[^a-z0-9ก-๙-]/gi, '')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 50);
